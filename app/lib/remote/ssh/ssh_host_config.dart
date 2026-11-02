@@ -18,6 +18,7 @@ class SshHostConfig {
     this.auth = SshAuthMethod.password,
     this.launchCommand = defaultDshLaunchCommand,
     this.workingDirectory,
+    this.windowsAttachExisting = false,
     this.hostKeyType,
     this.hostKeyFingerprint,
   });
@@ -40,6 +41,9 @@ class SshHostConfig {
   /// starts). `~/…` is expanded on the remote. Null: DSH's own default.
   final String? workingDirectory;
 
+  /// Attach to the Windows DSH process started by the home restart service.
+  final bool windowsAttachExisting;
+
   /// Pinned host key (trust on first use), e.g. `ssh-ed25519` and the
   /// OpenSSH `SHA256:…` fingerprint. Null until the person accepts it.
   final String? hostKeyType;
@@ -51,7 +55,7 @@ class SshHostConfig {
 
   /// Fields that require a new SSH session when they change (name and the
   /// pinned key don't).
-  String get connectionKey => [host, port, user, auth.name, launchCommand.trim()].join('\u0000');
+  String get connectionKey => [host, port, user, auth.name, launchCommand.trim(), windowsAttachExisting].join('\u0000');
 
   /// Changing where we connect forgets the pinned key: it belonged to the old
   /// machine.
@@ -63,6 +67,7 @@ class SshHostConfig {
     SshAuthMethod? auth,
     String? launchCommand,
     String? Function()? workingDirectory,
+    bool? windowsAttachExisting,
     String? Function()? hostKeyType,
     String? Function()? hostKeyFingerprint,
   }) {
@@ -76,6 +81,7 @@ class SshHostConfig {
       auth: auth ?? this.auth,
       launchCommand: launchCommand ?? this.launchCommand,
       workingDirectory: workingDirectory != null ? workingDirectory() : this.workingDirectory,
+      windowsAttachExisting: windowsAttachExisting ?? this.windowsAttachExisting,
       hostKeyType: hostKeyType != null ? hostKeyType() : (moved ? null : this.hostKeyType),
       hostKeyFingerprint: hostKeyFingerprint != null ? hostKeyFingerprint() : (moved ? null : this.hostKeyFingerprint),
     );
@@ -90,6 +96,7 @@ class SshHostConfig {
     'auth': auth.name,
     'launchCommand': launchCommand,
     if (workingDirectory != null) 'workingDirectory': workingDirectory,
+    if (windowsAttachExisting) 'windowsAttachExisting': true,
     if (hostKeyType != null) 'hostKeyType': hostKeyType,
     if (hostKeyFingerprint != null) 'hostKeyFingerprint': hostKeyFingerprint,
   };
@@ -113,6 +120,7 @@ class SshHostConfig {
       auth: SshAuthMethod.values.firstWhere((m) => m.name == raw['auth'], orElse: () => SshAuthMethod.password),
       launchCommand: command is String && command.trim().isNotEmpty ? command : defaultDshLaunchCommand,
       workingDirectory: cwd is String && cwd.trim().isNotEmpty ? cwd : null,
+      windowsAttachExisting: raw['windowsAttachExisting'] == true,
       hostKeyType: raw['hostKeyType'] as String?,
       hostKeyFingerprint: raw['hostKeyFingerprint'] as String?,
     );
@@ -135,12 +143,13 @@ class SshHostConfig {
       other.auth == auth &&
       other.launchCommand == launchCommand &&
       other.workingDirectory == workingDirectory &&
+      other.windowsAttachExisting == windowsAttachExisting &&
       other.hostKeyType == hostKeyType &&
       other.hostKeyFingerprint == hostKeyFingerprint;
 
   @override
   int get hashCode =>
-      Object.hash(id, name, host, port, user, auth, launchCommand, workingDirectory, hostKeyType, hostKeyFingerprint);
+      Object.hash(id, name, host, port, user, auth, launchCommand, workingDirectory, windowsAttachExisting, hostKeyType, hostKeyFingerprint);
 }
 
 /// The secret material for one SSH host, loaded from the [SecretStore].

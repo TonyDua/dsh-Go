@@ -7,6 +7,7 @@ import '../link_status.dart';
 import 'local_forward.dart';
 import 'remote_bootstrap.dart';
 import 'ssh_host_config.dart';
+import 'windows_attach.dart';
 import 'ssh_transport.dart';
 
 /// What the person is asked on first contact with a host.
@@ -245,16 +246,24 @@ class SshHostLink implements HostLink {
     _connectingTransport = transport;
     at(HostLinkStep.startDsh, detail: appL10n.remoteCheckingDsh);
     try {
-      final bootstrap = RemoteDshBootstrap(
-        transport,
-        launchCommand: _config.launchCommand,
-        workingDirectory: _config.workingDirectory,
-        environment: remoteEnvironment,
-      );
-      final endpoint = await bootstrap.ensureRunning(
-        forceRestart: _forceRestart,
-        onDetail: (d) => at(HostLinkStep.startDsh, detail: d),
-      );
+      final RemoteDshEndpoint endpoint;
+      if (_config.windowsAttachExisting) {
+        if (transport is! SshRawCommand) {
+          throw HostLinkError(HostLinkErrorKind.other, appL10n.remoteWindowsAttachError);
+        }
+        endpoint = await WindowsDshAttach.resolve(transport as SshRawCommand);
+      } else {
+        final bootstrap = RemoteDshBootstrap(
+          transport,
+          launchCommand: _config.launchCommand,
+          workingDirectory: _config.workingDirectory,
+          environment: remoteEnvironment,
+        );
+        endpoint = await bootstrap.ensureRunning(
+          forceRestart: _forceRestart,
+          onDetail: (d) => at(HostLinkStep.startDsh, detail: d),
+        );
+      }
       _checkOpen();
       _forceRestart = false;
 

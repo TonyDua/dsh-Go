@@ -1,0 +1,43 @@
+name: Fork Android APK
+on:
+  workflow_dispatch:
+  push:
+    branches: [fix/windows-ssh-attach]
+permissions:
+  contents: read
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.47.7'
+          channel: stable
+          cache: true
+      - name: Install runtime build tools
+        run: sudo apt-get update && sudo apt-get install -y zstd file xz-utils gpgv
+      - name: Generate translations and run SSH tests
+        run: |
+          cd app
+          flutter pub get
+          python3 tool/l10n_merge.py
+          flutter test test/remote/windows_attach_test.dart test/remote/ssh_link_test.dart test/remote/hosts_state_test.dart
+      - name: Build bundled arm64 runtime
+        run: bash runtime/build-runtime.sh arm64-v8a
+      - name: Build arm64 APK
+        run: bash tooling/build-apk.sh -f arm64 --keep-daemon
+      - name: Upload test APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: dsh-go-windows-ssh-arm64
+          path: app/build/app/outputs/flutter-apk/*arm64*release*.apk
+          if-no-files-found: error
+          retention-days: 14

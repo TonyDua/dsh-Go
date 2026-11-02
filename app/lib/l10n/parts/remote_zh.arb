@@ -1034,5 +1034,8 @@
     }
   },
   "remoteNetworkSnapshotHint": "显示最近一次确认的路径与延迟，刷新可重新检测。",
-  "remoteNetworkObservedAt": "最近观测"
+  "remoteNetworkObservedAt": "最近观测",
+  "remoteWindowsAttachTitle": "连接 Windows 上已运行的 DSH",
+  "remoteWindowsAttachHelp": "适用于家里 Windows 的现有服务：通过 SSH 读取当前用户 DSH 启动日志并连接，不启动或重启服务。",
+  "remoteWindowsAttachError": "找不到可用的 Windows DSH 启动信息。请检查当前用户的 .dsh/remote-host-restart/dsh.log 及服务状态。"
 }

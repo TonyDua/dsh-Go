@@ -50,6 +50,7 @@ class _SshHostFormPageState extends ConsumerState<SshHostFormPage> {
   final _passphrase = TextEditingController();
 
   late SshAuthMethod _auth = widget.existing?.auth ?? SshAuthMethod.password;
+  late bool _windowsAttachExisting = widget.existing?.windowsAttachExisting ?? false;
   late String? _keyType = widget.existing?.hostKeyType;
   late String? _keyFingerprint = widget.existing?.hostKeyFingerprint;
 
@@ -99,6 +100,7 @@ class _SshHostFormPageState extends ConsumerState<SshHostFormPage> {
     'privateKey': _privateKey.text,
     'passphrase': _passphrase.text,
     'auth': _auth.name,
+    'windowsAttachExisting': _windowsAttachExisting,
     'keyType': _keyType,
     'keyFingerprint': _keyFingerprint,
     'keyFor': _keyFor,
@@ -215,6 +217,7 @@ class _SshHostFormPageState extends ConsumerState<SshHostFormPage> {
       auth: _auth,
       launchCommand: _command.text.trim().isEmpty ? defaultDshLaunchCommand : _command.text.trim(),
       workingDirectory: _cwd.text.trim().isEmpty ? null : _cwd.text.trim(),
+      windowsAttachExisting: _windowsAttachExisting,
       hostKeyType: keyValid ? _keyType : null,
       hostKeyFingerprint: keyValid ? _keyFingerprint : null,
     );
@@ -571,12 +574,18 @@ class _SshHostFormPageState extends ConsumerState<SshHostFormPage> {
                 ),
               ),
               children: [
+                SwitchListTile(
+                  title: Text(l10n.remoteWindowsAttachTitle),
+                  subtitle: Text(l10n.remoteWindowsAttachHelp),
+                  value: _windowsAttachExisting,
+                  onChanged: (value) => setState(() => _windowsAttachExisting = value),
+                ),
                 FormFieldGroup(
                   children: [
                     FormFieldBlock(
                       label: l10n.remoteStartCommand,
                       helper: l10n.remoteStartCommandHelp,
-                      child: TextField(controller: _command, autocorrect: false, style: mono),
+                      child: TextField(controller: _command, enabled: !_windowsAttachExisting, autocorrect: false, style: mono),
                     ),
                     FormFieldBlock(
                       label: l10n.remoteWorkingDirectory,

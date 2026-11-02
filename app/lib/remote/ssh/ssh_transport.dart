@@ -93,8 +93,13 @@ abstract class SshTransport implements RemoteShell {
 
 typedef SshTransportFactory = Future<SshTransport> Function(SshConnectParams params, HostKeyCheck verifyHostKey);
 
+/// Runs a command without the Unix login-shell wrapper (for Windows sshd).
+abstract interface class SshRawCommand {
+  Future<RemoteExecResult> runRaw(String command, {Duration timeout = const Duration(seconds: 30)});
+}
+
 /// dartssh2-backed transport.
-class DartSshTransport implements SshTransport {
+class DartSshTransport implements SshTransport, SshRawCommand {
   DartSshTransport._(this._client);
 
   final SSHClient _client;
@@ -251,10 +256,14 @@ class DartSshTransport implements SshTransport {
   }
 
   @override
-  Future<RemoteExecResult> run(String script, {Duration timeout = const Duration(seconds: 30)}) async {
+  Future<RemoteExecResult> run(String script, {Duration timeout = const Duration(seconds: 30)}) =>
+      runRaw(loginShell(script), timeout: timeout);
+
+  @override
+  Future<RemoteExecResult> runRaw(String command, {Duration timeout = const Duration(seconds: 30)}) async {
     final SSHRunResult result;
     try {
-      result = await _client.runWithResult(loginShell(script)).timeout(timeout);
+      result = await _client.runWithResult(command).timeout(timeout);
     } on TimeoutException {
       throw HostLinkError(
         HostLinkErrorKind.unreachable,
