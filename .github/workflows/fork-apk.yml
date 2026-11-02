@@ -9,6 +9,8 @@ jobs:
   build:
     runs-on: ubuntu-latest
     timeout-minutes: 90
+    env:
+      DSH_TEST_FONT_DIR: /usr/share/fonts/opentype/noto
     steps:
       - uses: actions/checkout@v4
         with:
@@ -23,7 +25,7 @@ jobs:
           channel: stable
           cache: true
       - name: Install runtime build tools
-        run: sudo apt-get update && sudo apt-get install -y zstd file xz-utils gpgv
+        run: sudo apt-get update && sudo apt-get install -y zstd file xz-utils gpgv fonts-noto-cjk fonts-noto-cjk-extra
       - name: Generate translations and run SSH tests
         run: |
           cd app
