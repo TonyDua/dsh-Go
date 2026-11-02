@@ -724,6 +724,7 @@ class ChatController extends Notifier<ChatState> {
 
   void _listen(DshClient client, RunPulse pulse, {bool building = false}) {
     final owner = ref;
+    final ssh = ref.read(activeHostProvider).kind == HostKind.ssh;
     final listener = _listenOwner = Object();
     _watchEnded = false;
     bool current() => owner.mounted && identical(listener, _listenOwner) && identical(client, _client);
@@ -736,6 +737,9 @@ class ChatController extends Notifier<ChatState> {
           sessionId,
           options: WatchOptions(
             assistantStream: !_quiet,
+            turnWindow: ssh ? const TurnWindow(10, 1) : const TurnWindow(50, 2),
+            maxMessages: ssh ? 50 : 500,
+            backgroundSnapshotParsing: ssh,
             includeSyncEvents: true,
             activate: true,
             activationAllowed: () {
@@ -1770,15 +1774,15 @@ class ChatController extends Notifier<ChatState> {
         identical(client.mux.generation, generation);
     state = state.copyWith(loadingOlder: true);
     try {
-      // Same window as the official web client: back to a turn start (at
-      // least 50 messages, two turns), so the oldest loaded turn keeps its
-      // `turn/start` (footnote, fold); 500 caps one giant turn.
+      // A smaller SSH page bounds transfer and parsing on mobile; earlier
+      // pages remain available through the same history cursor.
+      final ssh = ref.read(activeHostProvider).kind == HostKind.ssh;
       final page = await client.history(
         sessionId,
         throughSeq: _transcript.newestSeq ?? oldest,
         beforeSeq: oldest,
-        maxMessages: 500,
-        turnWindow: const TurnWindow(50, 2),
+        maxMessages: ssh ? 50 : 500,
+        turnWindow: ssh ? const TurnWindow(10, 1) : const TurnWindow(50, 2),
       );
       if (!current()) return;
       _transcript.prependHistory(page);

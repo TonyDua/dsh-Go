@@ -3,6 +3,7 @@ library;
 
 import 'dart:async';
 import 'dart:convert';
+import 'dart:isolate';
 import 'dart:math';
 import 'dart:typed_data';
 
@@ -66,6 +67,7 @@ class WatchOptions {
     this.onActivationChecked,
     this.turnWindow = const TurnWindow(50, 2),
     this.maxMessages = 500,
+    this.backgroundSnapshotParsing = false,
     this.includeHostEvents = true,
     this.includeConnectionEvents = true,
     this.includeSyncEvents = false,
@@ -98,6 +100,9 @@ class WatchOptions {
   /// 50-message window cuts mid-turn. 500 as in the official web client
   /// (`HISTORY_PAGE_OPTIONS`).
   final int? maxMessages;
+
+  /// Build large snapshots on a worker isolate while preserving frame order.
+  final bool backgroundSnapshotParsing;
 
   /// Forward this session's approvals, questions, status and errors.
   final bool includeHostEvents;
@@ -203,6 +208,7 @@ class DshClient {
     DshTracer? tracer,
     bool backgroundSessionLists = false,
     bool backgroundLists = false,
+    bool backgroundMuxDecode = false,
     bool startMux = true,
     Duration readyTimeout = const Duration(seconds: 20),
   }) async {
@@ -215,7 +221,13 @@ class DshClient {
       launchToken ??= parsed.token;
     }
     if (base == null) throw ArgumentError('baseUri or launchUrl is required');
-    final connection = DshConnection(base, hostHeader: hostHeader, cookie: cookie, tracer: tracer);
+    final connection = DshConnection(
+      base,
+      hostHeader: hostHeader,
+      cookie: cookie,
+      tracer: tracer,
+      backgroundMuxDecode: backgroundMuxDecode,
+    );
     final client = DshClient(
       connection,
       muxOptions: muxOptions,
@@ -1098,7 +1110,7 @@ class _SessionWatch {
         await for (final item in stream.items) {
           if (_stopped) break;
           if (!opened) {
-            final first = parseFollowFrame(sessionId, item, isResync: _lastSeq >= 0);
+            final first = await _parseInitialFrame(item);
             if (first is! SessionSnapshotEvent) throw const _Resync('follow opened without snapshot');
             await _onSnapshot(first);
             opened = true;
@@ -1154,6 +1166,16 @@ class _SessionWatch {
     await _hostSub?.cancel();
     await _stateSub?.cancel();
     if (!_controller.isClosed) await _controller.close();
+  }
+
+  Future<DshEvent> _parseInitialFrame(Object? item) {
+    final isResync = _lastSeq >= 0;
+    final id = sessionId;
+    final records = asListOrEmpty(asMap(item)?['records']);
+    if (options.backgroundSnapshotParsing && records.length >= 100) {
+      return Isolate.run(() => parseFollowFrame(id, item, isResync: isResync), debugName: 'dsh-snapshot');
+    }
+    return Future.value(parseFollowFrame(id, item, isResync: isResync));
   }
 
   Future<void> _onSnapshot(SessionSnapshotEvent snapshot) async {

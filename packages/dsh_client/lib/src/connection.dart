@@ -155,6 +155,7 @@ class DshConnection {
     HttpClient? httpClient,
     this.connectTimeout = const Duration(seconds: 10),
     this.requestTimeout = const Duration(seconds: 120),
+    this.backgroundMuxDecode = false,
     DshTracer? tracer,
   }) : baseUri = _normalizeBase(baseUri),
        _http = httpClient ?? HttpClient(),
@@ -176,6 +177,8 @@ class DshConnection {
   final String? hostHeader;
   final Duration connectTimeout;
   final Duration requestTimeout;
+  /// Decode large multiplexed frames away from the caller isolate.
+  final bool backgroundMuxDecode;
   DshTracer? _tracer;
   DshTracer? get tracer => _tracer;
   set tracer(DshTracer? value) {
