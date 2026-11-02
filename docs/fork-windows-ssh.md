@@ -1,0 +1,7 @@
+# Fork: Windows SSH attachment
+
+This branch adds an opt-in attachment to the existing home Windows DSH service. In an SSH host's DSH settings, enable **Connect to an existing Windows DSH**, then use the usual Windows SSH username, password or private key, and verify the SSH host key. With Tailscale, enter the Windows device's Tailscale address. This keeps the existing DSH service and its workspaces; it does not start or restart DSH.
+
+The mode is specific to a Windows SSH account whose service writes its current loopback launch URL to `%USERPROFILE%\.dsh\remote-host-restart\dsh.log`. The application reads that URL over the encrypted SSH connection and forwards its loopback port through SSH. It does not save the launch token as part of the host configuration. A stale log, stopped service, inaccessible log, or SSH forwarding disabled will prevent connection. The standard Unix SSH mode is unchanged. Windows service installation and lifecycle management are outside this change.
+
+The `Fork Android APK` workflow runs SSH tests, builds the bundled arm64 runtime, and uploads the APK as an Actions artifact. The fork APK uses a separate Android application ID so it can be installed beside upstream. Unless a persistent release signing key is configured, CI signs with a newly generated debug key; APKs from different runs cannot necessarily update one another. Reinstallation may remove this test app's local data. No claim is made about mobile background survival or network quality until tested on a phone.

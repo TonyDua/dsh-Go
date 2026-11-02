@@ -216,7 +216,7 @@ class _SshHostFormPageState extends ConsumerState<SshHostFormPage> {
       user: user,
       auth: _auth,
       launchCommand: _command.text.trim().isEmpty ? defaultDshLaunchCommand : _command.text.trim(),
-      workingDirectory: _cwd.text.trim().isEmpty ? null : _cwd.text.trim(),
+      workingDirectory: _windowsAttachExisting || _cwd.text.trim().isEmpty ? null : _cwd.text.trim(),
       windowsAttachExisting: _windowsAttachExisting,
       hostKeyType: keyValid ? _keyType : null,
       hostKeyFingerprint: keyValid ? _keyFingerprint : null,
@@ -561,7 +561,7 @@ class _SshHostFormPageState extends ConsumerState<SshHostFormPage> {
             ),
             SettingsSection(
               title: 'DSH',
-              footer: Text.rich(
+              footer: _windowsAttachExisting ? null : Text.rich(
                 TextSpan(
                   children: [
                     TextSpan(text: installHint.first),
@@ -580,12 +580,12 @@ class _SshHostFormPageState extends ConsumerState<SshHostFormPage> {
                   value: _windowsAttachExisting,
                   onChanged: (value) => setState(() => _windowsAttachExisting = value),
                 ),
-                FormFieldGroup(
+                if (!_windowsAttachExisting) FormFieldGroup(
                   children: [
                     FormFieldBlock(
                       label: l10n.remoteStartCommand,
                       helper: l10n.remoteStartCommandHelp,
-                      child: TextField(controller: _command, enabled: !_windowsAttachExisting, autocorrect: false, style: mono),
+                      child: TextField(controller: _command, autocorrect: false, style: mono),
                     ),
                     FormFieldBlock(
                       label: l10n.remoteWorkingDirectory,
