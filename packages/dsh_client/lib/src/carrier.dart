@@ -30,6 +30,10 @@ import 'mux.dart';
 import 'rpc.dart';
 import 'rpc_envelope.dart';
 
+// Keep this closure's scope free of the live WebSocket and subscription:
+// sockets cannot be transferred to an isolate.
+Future<Object?> _decodeLargeMuxFrame(String data) => Isolate.run(() => tryDecodeJson(data), debugName: 'dsh-mux-json');
+
 /// Transport for one Host. Implementations must be safe to call
 /// concurrently; [DshMux] calls [openLink] again after every link loss.
 abstract class DshCarrier {
@@ -233,10 +237,12 @@ class _WebSocketMuxLink implements DshMuxLink {
           // Pausing ensures the next frame cannot overtake an isolate decode.
           subscription.pause();
           unawaited(
-            Isolate.run(() => tryDecodeJson(data), debugName: 'dsh-mux-json').then(
-              deliver,
-              onError: (Object _, StackTrace __) => _protocolFailure('Remote stream frame decode failed'),
-            ).whenComplete(subscription.resume),
+            _decodeLargeMuxFrame(data)
+                .then(
+                  deliver,
+                  onError: (Object error, StackTrace stack) => _protocolFailure('Remote stream frame decode failed'),
+                )
+                .whenComplete(subscription.resume),
           );
           return;
         }

@@ -1,5 +1,3 @@
-import 'dart:async';
-
 import 'package:dsh_client/dsh_client.dart';
 import 'package:test/test.dart';
 
@@ -35,7 +33,12 @@ void main() {
       });
       socket.item(id, {
         'type': 'event',
-        'event': {'type': 'permission/preset', 'seq': 120, 'time': 120, 'data': {'preset': 'workspace-write'}},
+        'event': {
+          'type': 'permission/preset',
+          'seq': 120,
+          'time': 120,
+          'data': {'preset': 'workspace-write'},
+        },
       });
     };
     final client = await DshClient.connect(
@@ -46,11 +49,10 @@ void main() {
     );
     addTearDown(client.close);
     final events = await client
-        .watch('s', options: const WatchOptions(
-          turnWindow: TurnWindow(10, 1),
-          maxMessages: 50,
-          backgroundSnapshotParsing: true,
-        ))
+        .watch(
+          's',
+          options: const WatchOptions(turnWindow: TurnWindow(10, 1), maxMessages: 50, backgroundSnapshotParsing: true),
+        )
         .where((e) => e is SessionSnapshotEvent || e is SessionLogEvent)
         .take(2)
         .toList()

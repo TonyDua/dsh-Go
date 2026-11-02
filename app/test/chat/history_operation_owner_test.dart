@@ -2,6 +2,7 @@ import 'dart:io';
 
 import 'package:dsh_app/state/chat_state.dart';
 import 'package:dsh_app/state/connection_state.dart';
+import 'package:dsh_app/state/hosts_state.dart';
 import 'package:dsh_client/dsh_client.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_riverpod/misc.dart' show Override;
@@ -95,10 +96,10 @@ class _Pair {
     AsyncData<HostConnection?>(HostConnection(client: peer.client, label: peer.label, isLocal: false)),
   );
 
-  static Future<_Pair> start() async {
+  static Future<_Pair> start({bool ssh = false}) async {
     final a = await _Peer.start('A');
     final b = await _Peer.start('B');
-    final container = ProviderContainer(overrides: [connection(a)]);
+    final container = ProviderContainer(overrides: [connection(a), if (ssh) activeHostProvider.overrideWith(_SshHost.new)]);
     container.listen(chatProvider('S'), (_, _) {});
     final pair = _Pair(a, b, container);
     await pair.ready(a);
@@ -122,6 +123,11 @@ class _Pair {
     await a.close();
     await b.close();
   }
+}
+
+class _SshHost extends ActiveHostController {
+  @override
+  HostRef build() => const HostRef.ssh('windows');
 }
 
 void main() {
@@ -148,6 +154,27 @@ void main() {
       expect(p.state.loadingOlder, isFalse);
     }),
   );
+
+  test('SSH follows a smaller window and loads earlier history on demand', () async {
+    await HttpOverrides.runWithHttpOverrides(() async {
+      final pair = await _Pair.start(ssh: true);
+      try {
+        final frames = pair.a.host.sockets.single.received;
+        final follow = frames.firstWhere((frame) => frame['endpoint'] == 'session/follow');
+        final request = (((follow['payload'] as Map)['args'] as Map)['request'] as Map);
+        expect(request['maxMessages'], 50);
+        expect(request['turnWindow'], {'minMessages': 10, 'minTurns': 1});
+        await pair.chat.loadOlder();
+        final wire = pair.a.host.rpcCalls.singleWhere((r) => r['method'] == 'session/page');
+        final page = ((wire['payload'] as Map)['args'] as Map)['request'] as Map;
+        expect(page['maxMessages'], 50);
+        expect(page['turnWindow'], {'minMessages': 10, 'minTurns': 1});
+        expect(pair.texts, ['older-A-1', 'current-A']);
+      } finally {
+        await pair.close();
+      }
+    }, RealSyncHttp());
+  });
 
   test(
     'current history failure clears busy and can retry',

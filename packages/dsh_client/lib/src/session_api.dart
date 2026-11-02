@@ -19,6 +19,10 @@ import 'mux.dart';
 import 'rpc.dart';
 import 'rpc_envelope.dart';
 
+// Isolates must not capture a watch's sockets or stream subscriptions.
+Future<DshEvent> _parseFollowSnapshot(String id, Object? item, bool isResync) =>
+    Isolate.run(() => parseFollowFrame(id, item, isResync: isResync), debugName: 'dsh-snapshot');
+
 /// `queue` waits for the next turn; `steer` injects into the running turn's
 /// next step.
 enum PromptMode {
@@ -1173,7 +1177,7 @@ class _SessionWatch {
     final id = sessionId;
     final records = asListOrEmpty(asMap(item)?['records']);
     if (options.backgroundSnapshotParsing && records.length >= 100) {
-      return Isolate.run(() => parseFollowFrame(id, item, isResync: isResync), debugName: 'dsh-snapshot');
+      return _parseFollowSnapshot(id, item, isResync);
     }
     return Future.value(parseFollowFrame(id, item, isResync: isResync));
   }

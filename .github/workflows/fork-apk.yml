@@ -31,7 +31,7 @@ jobs:
           cd app
           flutter pub get
           python3 tool/l10n_merge.py
-          flutter test test/remote/windows_attach_test.dart test/remote/ssh_link_test.dart test/remote/hosts_state_test.dart
+          flutter test test/remote/windows_attach_test.dart test/remote/ssh_link_test.dart test/remote/hosts_state_test.dart test/chat/history_operation_owner_test.dart test/chat/session_sync_network_test.dart
       - name: Test DSH client ordering and recovery
         run: |
           cd packages/dsh_client
