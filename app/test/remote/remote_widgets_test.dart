@@ -261,14 +261,18 @@ void main() {
     await tester.enterText(find.byType(TextField).at(4), 'password');
     final toggle = find.byType(SwitchListTile);
     await tester.ensureVisible(toggle);
+    await frames(tester);
     await tester.tap(toggle);
     await frames(tester);
+    expect(tester.widget<SwitchListTile>(toggle).value, isTrue);
     final log = find.byType(TextField).last;
     await tester.ensureVisible(log);
     await tester.enterText(log, 'http://127.0.0.1:3080/?token=do-not-save');
     await tester.ensureVisible(toggle);
+    await frames(tester);
     await tester.tap(toggle);
     await frames(tester);
+    expect(tester.widget<SwitchListTile>(toggle).value, isFalse);
     await tester.drag(find.byType(CustomScrollView), const Offset(0, -2000));
     await frames(tester);
     await tester.tap(find.text('保存'));
