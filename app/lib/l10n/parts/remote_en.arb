@@ -438,7 +438,13 @@
   "remoteNetworkFallbackPathUnverified": "The WebRTC route type hasn’t been confirmed.",
   "remoteNetworkSnapshotHint": "Shows the last confirmed route and latency. Refresh to check again.",
   "remoteNetworkObservedAt": "Last checked",
-  "remoteWindowsAttachTitle": "Connect to an existing Windows DSH",
-  "remoteWindowsAttachHelp": "For the existing home Windows service: read the current user’s DSH startup log over SSH. Does not start or restart the service.",
-  "remoteWindowsAttachError": "Could not find a usable Windows DSH launch. Check the current user’s .dsh/remote-host-restart/dsh.log and the service status."
+  "remoteWindowsAttachTitle": "Reuse an existing remote DSH instance",
+  "remoteWindowsAttachHelp": "Read its startup log over SSH and connect without starting or restarting the service.",
+  "remoteWindowsAttachError": "Cannot read or use the remote DSH startup log. Check the path, instance and SSH access.",
+  "remoteExistingPlatform": "Remote system",
+  "remoteExistingWindows": "Windows",
+  "remoteExistingPosix": "macOS / Linux",
+  "remoteExistingLogPath": "Remote startup log path",
+  "remoteExistingLogHelp": "Path to the log containing the DSH launch URL; leave blank for the original Windows default. Do not enter a login URL or token.",
+  "remoteExistingLogInvalid": "Enter a valid log file path, not a login URL or token; macOS / Linux requires a path."
 }

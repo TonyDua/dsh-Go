@@ -19,6 +19,8 @@ class SshHostConfig {
     this.launchCommand = defaultDshLaunchCommand,
     this.workingDirectory,
     this.windowsAttachExisting = false,
+    this.existingDshPlatform = 'windows',
+    this.existingDshLogPath,
     this.hostKeyType,
     this.hostKeyFingerprint,
   });
@@ -41,8 +43,12 @@ class SshHostConfig {
   /// starts). `~/…` is expanded on the remote. Null: DSH's own default.
   final String? workingDirectory;
 
-  /// Attach to the Windows DSH process started by the home restart service.
+  /// Attach to an existing remote DSH; the legacy name preserves saved hosts.
   final bool windowsAttachExisting;
+  /// `windows` or `posix`; legacy saved hosts default to Windows.
+  final String existingDshPlatform;
+  /// Remote launch log path; never a launch URL or token.
+  final String? existingDshLogPath;
 
   /// Pinned host key (trust on first use), e.g. `ssh-ed25519` and the
   /// OpenSSH `SHA256:…` fingerprint. Null until the person accepts it.
@@ -55,7 +61,7 @@ class SshHostConfig {
 
   /// Fields that require a new SSH session when they change (name and the
   /// pinned key don't).
-  String get connectionKey => [host, port, user, auth.name, launchCommand.trim(), windowsAttachExisting].join('\u0000');
+  String get connectionKey => [host, port, user, auth.name, launchCommand.trim(), windowsAttachExisting, existingDshPlatform, existingDshLogPath].join('\u0000');
 
   /// Changing where we connect forgets the pinned key: it belonged to the old
   /// machine.
@@ -68,6 +74,8 @@ class SshHostConfig {
     String? launchCommand,
     String? Function()? workingDirectory,
     bool? windowsAttachExisting,
+    String? existingDshPlatform,
+    String? Function()? existingDshLogPath,
     String? Function()? hostKeyType,
     String? Function()? hostKeyFingerprint,
   }) {
@@ -82,6 +90,8 @@ class SshHostConfig {
       launchCommand: launchCommand ?? this.launchCommand,
       workingDirectory: workingDirectory != null ? workingDirectory() : this.workingDirectory,
       windowsAttachExisting: windowsAttachExisting ?? this.windowsAttachExisting,
+      existingDshPlatform: existingDshPlatform ?? this.existingDshPlatform,
+      existingDshLogPath: existingDshLogPath != null ? existingDshLogPath() : this.existingDshLogPath,
       hostKeyType: hostKeyType != null ? hostKeyType() : (moved ? null : this.hostKeyType),
       hostKeyFingerprint: hostKeyFingerprint != null ? hostKeyFingerprint() : (moved ? null : this.hostKeyFingerprint),
     );
@@ -97,6 +107,8 @@ class SshHostConfig {
     'launchCommand': launchCommand,
     if (workingDirectory != null) 'workingDirectory': workingDirectory,
     if (windowsAttachExisting) 'windowsAttachExisting': true,
+    if (existingDshPlatform != 'windows') 'existingDshPlatform': existingDshPlatform,
+    if (existingDshLogPath != null) 'existingDshLogPath': existingDshLogPath,
     if (hostKeyType != null) 'hostKeyType': hostKeyType,
     if (hostKeyFingerprint != null) 'hostKeyFingerprint': hostKeyFingerprint,
   };
@@ -121,6 +133,8 @@ class SshHostConfig {
       launchCommand: command is String && command.trim().isNotEmpty ? command : defaultDshLaunchCommand,
       workingDirectory: cwd is String && cwd.trim().isNotEmpty ? cwd : null,
       windowsAttachExisting: raw['windowsAttachExisting'] == true,
+      existingDshPlatform: raw['existingDshPlatform'] == 'posix' ? 'posix' : 'windows',
+      existingDshLogPath: raw['existingDshLogPath'] is String ? raw['existingDshLogPath'] as String : null,
       hostKeyType: raw['hostKeyType'] as String?,
       hostKeyFingerprint: raw['hostKeyFingerprint'] as String?,
     );
@@ -144,12 +158,14 @@ class SshHostConfig {
       other.launchCommand == launchCommand &&
       other.workingDirectory == workingDirectory &&
       other.windowsAttachExisting == windowsAttachExisting &&
+      other.existingDshPlatform == existingDshPlatform &&
+      other.existingDshLogPath == existingDshLogPath &&
       other.hostKeyType == hostKeyType &&
       other.hostKeyFingerprint == hostKeyFingerprint;
 
   @override
   int get hashCode =>
-      Object.hash(id, name, host, port, user, auth, launchCommand, workingDirectory, windowsAttachExisting, hostKeyType, hostKeyFingerprint);
+      Object.hash(id, name, host, port, user, auth, launchCommand, workingDirectory, windowsAttachExisting, existingDshPlatform, existingDshLogPath, hostKeyType, hostKeyFingerprint);
 }
 
 /// The secret material for one SSH host, loaded from the [SecretStore].

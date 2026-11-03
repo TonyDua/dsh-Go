@@ -253,6 +253,33 @@ void main() {
     expect(prefs.getString(HostsController.prefsKey), isNot(contains('s3cret')));
   });
 
+  testWidgets('turning reuse off discards a typed launch URL and still saves', (tester) async {
+    final c = await pump(tester, const SshHostFormPage());
+    await tester.enterText(find.byType(TextField).at(0), 'test host');
+    await tester.enterText(find.byType(TextField).at(1), '10.0.0.8');
+    await tester.enterText(find.byType(TextField).at(2), 'me');
+    await tester.enterText(find.byType(TextField).at(4), 'password');
+    final toggle = find.byType(SwitchListTile);
+    await tester.ensureVisible(toggle);
+    await tester.tap(toggle);
+    await frames(tester);
+    final log = find.byType(TextField).last;
+    await tester.ensureVisible(log);
+    await tester.enterText(log, 'http://127.0.0.1:3080/?token=do-not-save');
+    await tester.ensureVisible(toggle);
+    await tester.tap(toggle);
+    await frames(tester);
+    await tester.drag(find.byType(CustomScrollView), const Offset(0, -2000));
+    await frames(tester);
+    await tester.tap(find.text('保存'));
+    await frames(tester);
+    final saved = c.read(hostsProvider).ssh.firstWhere((h) => h.name == 'test host');
+    expect(saved.windowsAttachExisting, isFalse);
+    expect(saved.existingDshLogPath, isNull);
+    final prefs = await SharedPreferences.getInstance();
+    expect(prefs.getString(HostsController.prefsKey), isNot(contains('do-not-save')));
+  });
+
   testWidgets('moving a host to another address drops its pinned key', (tester) async {
     secrets.values[SshSecrets.passwordKey(sampleSsh.id)] = 'pw';
     final c = await pump(tester, const SshHostFormPage(existing: sampleSsh));

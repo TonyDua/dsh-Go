@@ -31,16 +31,50 @@ jobs:
           cd app
           flutter pub get
           python3 tool/l10n_merge.py
-          flutter test test/remote/windows_attach_test.dart test/remote/ssh_link_test.dart test/remote/hosts_state_test.dart test/chat/history_operation_owner_test.dart test/chat/session_sync_network_test.dart
+          flutter test test/remote/windows_attach_test.dart test/remote/ssh_link_test.dart test/remote/hosts_state_test.dart test/remote/remote_widgets_test.dart test/chat/history_operation_owner_test.dart test/chat/session_sync_network_test.dart test/chat/voice_model_route_test.dart
       - name: Test DSH client ordering and recovery
         run: |
           cd packages/dsh_client
           dart pub get
           dart test test/ssh_large_snapshot_test.dart test/watch_window_test.dart test/mux_generation_history_test.dart
-      - name: Stage verified upstream arm64 runtime
+      # The pinned proot version has disappeared from the current Termux package
+      # index. Fetch its official build artifact and verify it against the runtime pin.
+      - name: Seed pinned Termux proot from official artifact
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: |
-          curl --fail --location --retry 3 -o /tmp/upstream-arm64.apk https://github.com/ccch1mneyyy/dsh-Go/releases/download/v1.0.9/dsh-go-1.0.9-arm64.apk
-          python3 tooling/reuse-upstream-runtime.py /tmp/upstream-arm64.apk
+          set -euo pipefail
+          artifact="$RUNNER_TEMP/termux-proot.zip"
+          curl --fail --location --silent --show-error --retry 3 \
+            -H "Accept: application/vnd.github+json" \
+            -H "Authorization: Bearer $GH_TOKEN" \
+            -H "X-GitHub-Api-Version: 2022-11-28" \
+            -o "$artifact" \
+            https://api.github.com/repos/termux/termux-packages/actions/artifacts/12163314230/zip
+          python3 - "$artifact" <<'PYEOF'
+          import hashlib
+          import io
+          from pathlib import Path
+          import sys
+          import tarfile
+          import zipfile
+
+          archive = 'debs-aarch64-9aedff9c28af3ca93c42eb2c3074221893232ae9.tar'
+          member = 'debs/proot_5.1.107.98_aarch64.deb'
+          expected = '29de40efea4daa2a6168b617915206511c63e8d46bf5f4b07d48723441ef7f3b'
+          with zipfile.ZipFile(sys.argv[1]) as z:
+              with tarfile.open(fileobj=io.BytesIO(z.read(archive))) as t:
+                  data = t.extractfile(member).read()
+          actual = hashlib.sha256(data).hexdigest()
+          if actual != expected:
+              raise SystemExit(f'Termux proot SHA-256 mismatch: {actual}')
+          dest = Path('runtime/.cache/termux') / Path(member).name
+          dest.parent.mkdir(parents=True, exist_ok=True)
+          dest.write_bytes(data)
+          print(f'Verified {dest} ({len(data)} bytes)')
+          PYEOF
+      - name: Build arm64 runtime with current patches
+        run: bash runtime/build-runtime.sh arm64-v8a
       - name: Build arm64 APK
         run: bash tooling/build-apk.sh -f arm64 --keep-daemon
       - name: Upload test APK

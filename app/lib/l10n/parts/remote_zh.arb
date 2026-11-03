@@ -1035,7 +1035,13 @@
   },
   "remoteNetworkSnapshotHint": "显示最近一次确认的路径与延迟，刷新可重新检测。",
   "remoteNetworkObservedAt": "最近观测",
-  "remoteWindowsAttachTitle": "连接 Windows 上已运行的 DSH",
-  "remoteWindowsAttachHelp": "适用于家里 Windows 的现有服务：通过 SSH 读取当前用户 DSH 启动日志并连接，不启动或重启服务。",
-  "remoteWindowsAttachError": "找不到可用的 Windows DSH 启动信息。请检查当前用户的 .dsh/remote-host-restart/dsh.log 及服务状态。"
+  "remoteWindowsAttachTitle": "复用远程机已存在的 DSH 实例",
+  "remoteWindowsAttachHelp": "通过 SSH 读取远端启动日志并连接已有实例，不启动或重启服务。",
+  "remoteWindowsAttachError": "无法读取或使用远程 DSH 启动日志，请检查日志路径、实例状态和 SSH 访问权限。",
+  "remoteExistingPlatform": "远端系统",
+  "remoteExistingWindows": "Windows",
+  "remoteExistingPosix": "macOS / Linux",
+  "remoteExistingLogPath": "远端启动日志路径",
+  "remoteExistingLogHelp": "填写包含 DSH 启动地址的日志文件路径；Windows 留空使用原默认路径。不要填写登录地址或令牌。",
+  "remoteExistingLogInvalid": "请填写有效的日志文件路径，不要填写登录地址或令牌；macOS / Linux 需要指定路径。"
 }

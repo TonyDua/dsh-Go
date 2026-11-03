@@ -123,7 +123,7 @@ void main() {
     await settleVoice(tester);
     expect(bridge.calls, isNot(contains('recognizer')));
     expect(messages.single.change, isTrue);
-    expect(messages.single.text, '请先在语音设置里下载语音模型');
+    expect(messages.single.text, '请先下载语音模型并启动手机本地引擎');
   });
   testWidgets('pet fallback pins the offline provider despite a cloud default', (tester) async {
     final catalog = readySpeechCatalog();
@@ -168,5 +168,174 @@ void main() {
     expect(bridge.calls.where((c) => c.startsWith('recorder:')), isEmpty);
     expect(bridge.calls, isNot(contains('recognizer')));
     expect(voice.phase, VoicePhase.idle);
+  });
+
+  testWidgets('remote chat uses the phone model and never uploads audio to the remote host', (tester) async {
+    final remote = FakeRpcCarrier({});
+    final local = FakeRpcCarrier({
+      'speech/catalog': (_) => readySpeechCatalog(),
+      'speech/transcribe': (_) => {'text': 'local recognition', 'audioSeconds': 1},
+    });
+    final remoteClient = DshClient.withCarrier(remote);
+    final localClient = DshClient.withCarrier(local);
+    final bridge = FakeVoiceBridge()..recording = silentWav(1);
+    final voice = VoiceInputController(
+      input: input,
+      bridge: bridge,
+      client: () => remoteClient,
+      speechClient: () => localClient,
+      mode: () async => VoiceMode.engine,
+      requiredProviderId: 'sensevoice-local',
+      observeLifecycle: false,
+    );
+    addTearDown(voice.dispose);
+    await voice.start();
+    await settleVoice(tester);
+    await voice.stop();
+    await settleVoice(tester);
+    expect(input.text, contains('local recognition'));
+    expect(local.argsOf('speech/transcribe'), hasLength(1));
+    expect(remote.calls, isEmpty);
+  });
+
+  testWidgets('remote chat cannot use remote speech when the phone engine is absent', (tester) async {
+    final remote = FakeRpcCarrier({'speech/catalog': (_) => readySpeechCatalog()});
+    final remoteClient = DshClient.withCarrier(remote);
+    final bridge = FakeVoiceBridge();
+    final voice = VoiceInputController(
+      input: input,
+      bridge: bridge,
+      client: () => remoteClient,
+      speechClient: () => null,
+      mode: () async => VoiceMode.engine,
+      requiredProviderId: 'sensevoice-local',
+      observeLifecycle: false,
+    );
+    addTearDown(voice.dispose);
+    await voice.start();
+    await settleVoice(tester);
+    expect(voice.phase, VoicePhase.idle);
+    expect(remote.calls, isEmpty);
+    expect(bridge.calls.where((c) => c.startsWith('recorder:')), isEmpty);
+  });
+
+  testWidgets('switching the remote chat host cancels a phone-model recording', (tester) async {
+    final local = FakeRpcCarrier({'speech/catalog': (_) => readySpeechCatalog()});
+    final localClient = DshClient.withCarrier(local);
+    var remote = DshClient.withCarrier(FakeRpcCarrier({}));
+    final bridge = FakeVoiceBridge()..recording = silentWav(1);
+    final voice = VoiceInputController(
+      input: input,
+      bridge: bridge,
+      client: () => remote,
+      speechClient: () => localClient,
+      mode: () async => VoiceMode.engine,
+      requiredProviderId: 'sensevoice-local',
+      observeLifecycle: false,
+    );
+    addTearDown(voice.dispose);
+    await voice.start();
+    await settleVoice(tester);
+    expect(voice.phase, VoicePhase.listening);
+    remote = DshClient.withCarrier(FakeRpcCarrier({}));
+    voice.ensureFresh();
+    await settleVoice(tester);
+    expect(voice.phase, VoicePhase.idle);
+    expect(local.argsOf('speech/transcribe'), isEmpty);
+    expect(input.text, isEmpty);
+  });
+
+  testWidgets('losing the phone engine cancels recording while the remote host stays connected', (tester) async {
+    final local = FakeRpcCarrier({'speech/catalog': (_) => readySpeechCatalog()});
+    DshClient? localClient = DshClient.withCarrier(local);
+    final remote = DshClient.withCarrier(FakeRpcCarrier({}));
+    final bridge = FakeVoiceBridge()..recording = silentWav(1);
+    final voice = VoiceInputController(
+      input: input,
+      bridge: bridge,
+      client: () => remote,
+      speechClient: () => localClient,
+      mode: () async => VoiceMode.engine,
+      requiredProviderId: 'sensevoice-local',
+      observeLifecycle: false,
+    );
+    addTearDown(voice.dispose);
+    await voice.start();
+    await settleVoice(tester);
+    expect(voice.phase, VoicePhase.listening);
+    localClient = null;
+    voice.ensureFresh();
+    await settleVoice(tester);
+    expect(voice.phase, VoicePhase.idle);
+    expect(local.argsOf('speech/transcribe'), isEmpty);
+  });
+
+  testWidgets('a model that becomes unavailable clears the cached capability', (tester) async {
+    var phase = 'standby';
+    final local = FakeRpcCarrier({'speech/catalog': (_) => readySpeechCatalog(phase: phase)});
+    final client = DshClient.withCarrier(local);
+    final bridge = FakeVoiceBridge(caps: const VoiceCapabilities(recognizer: false, recorder: true));
+    final voice = VoiceInputController(
+      input: input,
+      bridge: bridge,
+      client: () => client,
+      speechClient: () => client,
+      requiredProviderId: 'sensevoice-local',
+      observeLifecycle: false,
+    );
+    addTearDown(voice.dispose);
+    await voice.refresh();
+    expect(voice.engineReady, isTrue);
+    phase = 'unprepared';
+    await voice.refresh();
+    expect(voice.engineReady, isFalse);
+    expect(voice.available, isFalse);
+  });
+
+  testWidgets('provider policy follows host changes while preserving local selection', (tester) async {
+    final catalog = readySpeechCatalog();
+    (catalog['providers'] as List).add({
+      'id': 'other-local',
+      'name': 'Other',
+      'location': 'host-local',
+      'languages': ['auto'],
+      'preparation': {'phase': 'standby'},
+    });
+    catalog['selection'] = {'providerId': 'other-local', 'language': 'auto'};
+    final local = FakeRpcCarrier({
+      'speech/catalog': (_) => catalog,
+      'speech/transcribe': (_) => {'text': 'recognized', 'audioSeconds': 1},
+    });
+    final localClient = DshClient.withCarrier(local);
+    final remote = FakeRpcCarrier({});
+    final remoteClient = DshClient.withCarrier(remote);
+    var active = localClient;
+    var remoteHost = false;
+    final bridge = FakeVoiceBridge()..recording = silentWav(1);
+    final voice = VoiceInputController(
+      input: input,
+      bridge: bridge,
+      client: () => active,
+      speechClient: () => localClient,
+      requiredProviderIdForRun: () => remoteHost ? 'sensevoice-local' : null,
+      mode: () async => VoiceMode.engine,
+      observeLifecycle: false,
+    );
+    addTearDown(voice.dispose);
+    await voice.start();
+    await settleVoice(tester);
+    await voice.stop();
+    await settleVoice(tester);
+    expect((local.argsOf('speech/transcribe').last['request'] as Map)['providerId'], 'other-local');
+    remoteHost = true;
+    active = remoteClient;
+    voice.ensureFresh();
+    await settleVoice(tester);
+    await voice.start();
+    await settleVoice(tester);
+    await voice.stop();
+    await settleVoice(tester);
+    expect((local.argsOf('speech/transcribe').last['request'] as Map)['providerId'], 'sensevoice-local');
+    expect(remote.calls, isEmpty);
   });
 }

@@ -1,3 +1,5 @@
+import 'dart:io';
+
 import 'package:dsh_app/remote/ssh/remote_shell.dart';
 import 'package:dsh_app/remote/ssh/ssh_host_config.dart';
 import 'package:dsh_app/remote/ssh/ssh_transport.dart';
@@ -40,5 +42,27 @@ void main() {
     expect(SshHostConfig.fromJson(windows.toJson()), windows);
     expect(windows.connectionKey, isNot(config.connectionKey));
     expect(SshHostConfig.fromJson(config.toJson())!.windowsAttachExisting, isFalse);
+    final posix = windows.copyWith(existingDshPlatform: 'posix', existingDshLogPath: () => '~/logs/dsh.log');
+    expect(SshHostConfig.fromJson(posix.toJson()), posix);
+    expect(posix.connectionKey, isNot(windows.connectionKey));
+    expect(SshHostConfig.fromJson(windows.toJson())!.existingDshPlatform, 'windows');
+  });
+
+  test('POSIX attaches from a quoted log path without interpreting shell text', () async {
+    final temp = await Directory.systemTemp.createTemp('dsh-log-test-');
+    addTearDown(() => temp.delete(recursive: true));
+    final log = File("${temp.path}/dsh'\$(touch injected).log");
+    await log.writeAsString('http://127.0.0.1:3080/?token=test-token\n');
+    final endpoint = await PosixDshAttach.resolve(LocalProcessShell(workingDirectory: temp.path), log.path);
+    expect(endpoint.port, 3080);
+    expect(endpoint.token, 'test-token');
+    expect(await File('${temp.path}/injected').exists(), isFalse);
+  });
+
+  test('POSIX missing logs and non-loopback launch fail without leaking content', () async {
+    await expectLater(PosixDshAttach.resolve(LocalProcessShell(), '/no-such-dsh-test-log'), throwsA(isA<Exception>()));
+    expect(() => PosixDshAttach.script(''), throwsA(isA<Exception>()));
+    final raw = WindowsDshAttach.commandFor("log'\$(do-not-run)");
+    expect(raw, isNot(contains('do-not-run')));
   });
 }

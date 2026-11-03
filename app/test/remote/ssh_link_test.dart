@@ -62,6 +62,15 @@ void main() {
     return l;
   }
 
+  test('reuse does not pass its preserved working directory to new sessions', () {
+    final retained = sampleSsh.copyWith(workingDirectory: () => '~/project', windowsAttachExisting: true);
+    final existing = link(config: retained);
+    expect(existing.config.workingDirectory, '~/project');
+    expect(existing.resolvedWorkingDirectory, isNull);
+    final managed = link(config: retained.copyWith(windowsAttachExisting: false));
+    expect(managed.resolvedWorkingDirectory, '~/project');
+  });
+
   test('a mux stuck reconnecting over live SSH restarts a dead DSH', () async {
     final l = link();
     final original = await l.open();

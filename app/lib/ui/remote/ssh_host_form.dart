@@ -45,12 +45,14 @@ class _SshHostFormPageState extends ConsumerState<SshHostFormPage> {
   late final _user = TextEditingController(text: widget.existing?.user ?? '');
   late final _command = TextEditingController(text: widget.existing?.launchCommand ?? defaultDshLaunchCommand);
   late final _cwd = TextEditingController(text: widget.existing?.workingDirectory ?? '');
+  late final _existingLog = TextEditingController(text: widget.existing?.existingDshLogPath ?? '');
   final _password = TextEditingController();
   final _privateKey = TextEditingController();
   final _passphrase = TextEditingController();
 
   late SshAuthMethod _auth = widget.existing?.auth ?? SshAuthMethod.password;
   late bool _windowsAttachExisting = widget.existing?.windowsAttachExisting ?? false;
+  late String _existingPlatform = widget.existing?.existingDshPlatform ?? 'windows';
   late String? _keyType = widget.existing?.hostKeyType;
   late String? _keyFingerprint = widget.existing?.hostKeyFingerprint;
 
@@ -84,6 +86,7 @@ class _SshHostFormPageState extends ConsumerState<SshHostFormPage> {
     _user,
     _command,
     _cwd,
+    _existingLog,
     _password,
     _privateKey,
     _passphrase,
@@ -101,6 +104,8 @@ class _SshHostFormPageState extends ConsumerState<SshHostFormPage> {
     'passphrase': _passphrase.text,
     'auth': _auth.name,
     'windowsAttachExisting': _windowsAttachExisting,
+    'existingPlatform': _existingPlatform,
+    'existingLog': _existingLog.text,
     'keyType': _keyType,
     'keyFingerprint': _keyFingerprint,
     'keyFor': _keyFor,
@@ -167,7 +172,7 @@ class _SshHostFormPageState extends ConsumerState<SshHostFormPage> {
   void dispose() {
     unawaited(_testSub?.cancel());
     unawaited(_test?.close());
-    for (final c in [_name, _host, _port, _user, _command, _cwd, _password, _privateKey, _passphrase]) {
+    for (final c in [_name, _host, _port, _user, _command, _cwd, _existingLog, _password, _privateKey, _passphrase]) {
       c.dispose();
     }
     super.dispose();
@@ -175,6 +180,14 @@ class _SshHostFormPageState extends ConsumerState<SshHostFormPage> {
 
   /// The config as typed; null (with [_errors] set) when incomplete.
   SshHostConfig? _draft() {
+    final logPath = _existingLog.text.trim();
+    final invalidLog = logPath.contains('://') ||
+        RegExp(r'token\s*=', caseSensitive: false).hasMatch(logPath) ||
+        logPath.contains('\n') || logPath.contains('\r') || logPath.contains('\u0000');
+    if (_windowsAttachExisting && (invalidLog || (logPath.isEmpty && _existingPlatform == 'posix'))) {
+      setState(() => _formError = context.l10n.remoteExistingLogInvalid);
+      return null;
+    }
     final host = _host.text.trim();
     final user = _user.text.trim();
     final port = int.tryParse(_port.text.trim());
@@ -216,8 +229,10 @@ class _SshHostFormPageState extends ConsumerState<SshHostFormPage> {
       user: user,
       auth: _auth,
       launchCommand: _command.text.trim().isEmpty ? defaultDshLaunchCommand : _command.text.trim(),
-      workingDirectory: _windowsAttachExisting || _cwd.text.trim().isEmpty ? null : _cwd.text.trim(),
+      workingDirectory: _cwd.text.trim().isEmpty ? null : _cwd.text.trim(),
       windowsAttachExisting: _windowsAttachExisting,
+      existingDshPlatform: _existingPlatform,
+      existingDshLogPath: logPath.isEmpty || invalidLog ? null : logPath,
       hostKeyType: keyValid ? _keyType : null,
       hostKeyFingerprint: keyValid ? _keyFingerprint : null,
     );
@@ -580,6 +595,24 @@ class _SshHostFormPageState extends ConsumerState<SshHostFormPage> {
                   value: _windowsAttachExisting,
                   onChanged: (value) => setState(() => _windowsAttachExisting = value),
                 ),
+                if (_windowsAttachExisting) FormFieldGroup(children: [
+                  FormFieldBlock(
+                    label: l10n.remoteExistingPlatform,
+                    child: DropdownButtonFormField<String>(
+                      initialValue: _existingPlatform,
+                      items: [
+                        DropdownMenuItem(value: 'windows', child: Text(l10n.remoteExistingWindows)),
+                        DropdownMenuItem(value: 'posix', child: Text(l10n.remoteExistingPosix)),
+                      ],
+                      onChanged: (value) { if (value != null) setState(() => _existingPlatform = value); },
+                    ),
+                  ),
+                  FormFieldBlock(
+                    label: l10n.remoteExistingLogPath,
+                    helper: l10n.remoteExistingLogHelp,
+                    child: TextField(controller: _existingLog, autocorrect: false, style: mono),
+                  ),
+                ]),
                 if (!_windowsAttachExisting) FormFieldGroup(
                   children: [
                     FormFieldBlock(

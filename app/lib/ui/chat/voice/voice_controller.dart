@@ -55,12 +55,14 @@ String voiceErrorText(int code) => switch (code) {
 };
 
 class _VoiceTarget {
-  const _VoiceTarget(this.client, this.generation, this.catalog);
+  const _VoiceTarget(this.client, this.generation, this.catalog, this.providerPolicy);
   final DshClient client;
   final MuxGeneration? generation;
   final SpeechCatalog catalog;
+  final String? providerPolicy;
 
-  bool current(DshClient? active) => identical(client, active) && identical(generation, client.mux.generation);
+  bool current(DshClient? active, String? policy) =>
+      identical(client, active) && identical(generation, client.mux.generation) && providerPolicy == policy;
 }
 
 class VoiceInputController extends ChangeNotifier with WidgetsBindingObserver {
@@ -68,12 +70,15 @@ class VoiceInputController extends ChangeNotifier with WidgetsBindingObserver {
     required this.input,
     required this.bridge,
     required this.client,
+    DshClient? Function()? speechClient,
     Future<VoiceMode> Function()? mode,
     bool Function()? modelReady,
     this.onRecognized,
     this.requiredProviderId,
+    this.requiredProviderIdForRun,
     bool observeLifecycle = true,
   }) : _mode = mode ?? _automatic,
+       _speechClient = speechClient ?? client,
        _modelReady = modelReady ?? _noModel,
        _observing = observeLifecycle {
     if (_observing) WidgetsBinding.instance.addObserver(this);
@@ -85,9 +90,14 @@ class VoiceInputController extends ChangeNotifier with WidgetsBindingObserver {
 
   /// Optional strict offline provider for the pet foreground fallback.
   final String? requiredProviderId;
+  /// Dynamic per-chat policy; returns null to use the engine's selection.
+  final String? Function()? requiredProviderIdForRun;
+  String? get _providerId => requiredProviderIdForRun != null ? requiredProviderIdForRun!() : requiredProviderId;
   final TextEditingController input;
   final VoiceBridge bridge;
   final DshClient? Function() client;
+  /// The engine that performs transcription; independent from the chat host.
+  final DshClient? Function() _speechClient;
   final Future<VoiceMode> Function() _mode;
 
   /// The on-device voice model is ready for this host (voice settings):
@@ -105,6 +115,7 @@ class VoiceInputController extends ChangeNotifier with WidgetsBindingObserver {
   _VoiceTarget? _target;
   DshClient? _probedClient;
   MuxGeneration? _probedGeneration;
+  String? _probedPolicy;
   Future<void>? _refreshing;
   int _catalogProbe = 0;
   bool _disposed = false;
@@ -130,7 +141,7 @@ class VoiceInputController extends ChangeNotifier with WidgetsBindingObserver {
   VoicePhase get phase => _phase;
   bool get active => _phase != VoicePhase.idle;
   VoiceEngine? get engine => _engine;
-  bool get engineReady => _caps.recorder && (_catalog?.current(client()) ?? false);
+  bool get engineReady => _caps.recorder && (_catalog?.current(_speechClient(), _providerId) ?? false);
   bool get available => _caps.recognizer || engineReady;
 
   bool _current(int operation) => !_disposed && active && operation == _operation;
@@ -145,10 +156,10 @@ class VoiceInputController extends ChangeNotifier with WidgetsBindingObserver {
   /// Wait for that probe, without replaying the event onto a replacement host.
   Future<void> refreshAfterModelChange() async {
     if (_disposed) return;
-    final c = client();
+    final c = _speechClient();
     final generation = c?.mux.generation;
     await _refreshing;
-    if (_disposed || !identical(client(), c) || !identical(c?.mux.generation, generation)) return;
+    if (_disposed || !identical(_speechClient(), c) || !identical(c?.mux.generation, generation)) return;
     await refresh();
   }
 
@@ -156,11 +167,12 @@ class VoiceInputController extends ChangeNotifier with WidgetsBindingObserver {
     final caps = await bridge.capabilities();
     if (_disposed) return;
     _caps = caps;
-    final c = client();
+    final c = _speechClient();
     final generation = c?.mux.generation;
     _probedClient = c;
     _probedGeneration = generation;
-    if (!(_catalog?.current(c) ?? false)) _catalog = null;
+    _probedPolicy = _providerId;
+    if (!(_catalog?.current(c, _providerId) ?? false)) _catalog = null;
     // A working system service must not wait for a slow engine probe. The
     // fallback and explicit Engine mode probe on demand, including on ROMs
     // that report a system service which fails as soon as it is called.
@@ -169,46 +181,54 @@ class VoiceInputController extends ChangeNotifier with WidgetsBindingObserver {
   }
 
   Future<_VoiceTarget?> _readCatalog(DshClient? c, MuxGeneration? generation) async {
-    if (c == null || !_caps.recorder || !identical(client(), c) || !identical(c.mux.generation, generation)) {
+    if (c == null || !_caps.recorder || !identical(_speechClient(), c) || !identical(c.mux.generation, generation)) {
       return null;
     }
     final probe = ++_catalogProbe;
+    final policy = _providerId;
     _VoiceTarget? target;
     try {
       var catalog = await c.speechCatalog().timeout(const Duration(seconds: 4));
-      if (requiredProviderId case final id?) {
+      if (policy case final id?) {
         final provider = catalog?.providers.where((p) => p.id == id && p.location == 'host-local').firstOrNull;
-        if (provider == null || !provider.usable) return null;
-        catalog = SpeechCatalog(
-          providers: catalog!.providers,
-          providerId: id,
-          language: catalog.language,
-          maxAudioBytes: catalog.maxAudioBytes,
-          maxDurationSeconds: catalog.maxDurationSeconds,
-        );
+        if (provider == null || !provider.usable) {
+          catalog = null;
+        } else {
+          catalog = SpeechCatalog(
+            providers: catalog!.providers,
+            providerId: id,
+            language: catalog.language,
+            maxAudioBytes: catalog.maxAudioBytes,
+            maxDurationSeconds: catalog.maxDurationSeconds,
+          );
+        }
       }
-      if (catalog?.selected?.usable ?? false) target = _VoiceTarget(c, generation, catalog!);
+      if (catalog?.selected?.usable ?? false) target = _VoiceTarget(c, generation, catalog!, policy);
     } catch (_) {
       // Missing speech bundle, unavailable provider, or disconnected host.
     }
-    if (_disposed || !identical(client(), c) || !identical(c.mux.generation, generation)) return null;
-    if (probe == _catalogProbe) _catalog = target;
+    if (_disposed || !identical(_speechClient(), c) || !identical(c.mux.generation, generation) ||
+        probe != _catalogProbe || policy != _providerId) return null;
+    _catalog = target;
     return target;
   }
 
   void ensureFresh() {
     if (_disposed) return;
-    if (active && !_hostCurrent) {
+    if (active && (!_hostCurrent || (_target != null && !_target!.current(_speechClient(), _providerId)))) {
       // Composer calls this while building. Restoring the draft notifies its
       // persistence listener, so defer it until after this synchronous build.
       // A queued check from an older run must never cancel its replacement.
       final operation = _operation;
       scheduleMicrotask(() {
-        if (_current(operation) && !_hostCurrent) unawaited(cancel());
+        if (_current(operation) && (!_hostCurrent || (_target != null && !_target!.current(_speechClient(), _providerId)))) {
+          unawaited(cancel());
+        }
       });
     }
-    final c = client();
-    if (_refreshing != null || (identical(c, _probedClient) && identical(c?.mux.generation, _probedGeneration))) return;
+    final c = _speechClient();
+    if (_refreshing != null || (identical(c, _probedClient) && identical(c?.mux.generation, _probedGeneration) &&
+        _probedPolicy == _providerId)) return;
     scheduleMicrotask(() => unawaited(refresh()));
   }
 
@@ -281,16 +301,26 @@ class VoiceInputController extends ChangeNotifier with WidgetsBindingObserver {
       // The voice model first: phone services on Chinese ROMs report
       // themselves available and then fail. The engine has the last word; a
       // stale "ready" leaves the phone service as it was.
-      final target = await _readCatalog(_runClient, _runGeneration);
+      final speech = _speechClient();
+      final target = await _readCatalog(speech, speech?.mux.generation);
       if (!_current(operation)) return;
+      if (!_hostCurrent) {
+        await cancel();
+        return;
+      }
       if (target != null) {
         await _startRecorder(operation, target);
         return;
       }
     }
     if (!system) {
-      final target = await _readCatalog(_runClient, _runGeneration);
+      final speech = _speechClient();
+      final target = await _readCatalog(speech, speech?.mux.generation);
       if (!_current(operation)) return;
+      if (!_hostCurrent) {
+        await cancel();
+        return;
+      }
       if (target == null) {
         _finish();
         _say(
@@ -333,7 +363,11 @@ class VoiceInputController extends ChangeNotifier with WidgetsBindingObserver {
   }
 
   Future<void> _startRecorder(int operation, _VoiceTarget target, {bool fallback = false}) async {
-    if (!_current(operation) || !target.current(client())) return;
+    if (!_current(operation)) return;
+    if (!_hostCurrent || !target.current(_speechClient(), _providerId)) {
+      await cancel();
+      return;
+    }
     _target = target;
     _engine = VoiceEngine.engine;
     _switching = false;
@@ -348,7 +382,7 @@ class VoiceInputController extends ChangeNotifier with WidgetsBindingObserver {
       return;
     }
     if (!_current(operation) || _phase != VoicePhase.starting) return;
-    if (!target.current(client())) {
+    if (!_hostCurrent || !target.current(_speechClient(), _providerId)) {
       await cancel();
       return;
     }
@@ -377,8 +411,13 @@ class VoiceInputController extends ChangeNotifier with WidgetsBindingObserver {
       _say(VoiceMessage(appL10n.commonEngineUnreachable));
       return;
     }
-    final target = await _readCatalog(_runClient, _runGeneration);
+    final speech = _speechClient();
+    final target = await _readCatalog(speech, speech?.mux.generation);
     if (!_current(operation)) return;
+    if (!_hostCurrent) {
+      await cancel();
+      return;
+    }
     if (target == null) {
       _finish();
       _say(VoiceMessage(appL10n.voiceConfigureEither, change: true));
@@ -421,7 +460,7 @@ class VoiceInputController extends ChangeNotifier with WidgetsBindingObserver {
       return;
     }
     if (!_current(operation)) return;
-    if (target == null || !target.current(client())) {
+    if (target == null || !_hostCurrent || !target.current(_speechClient(), _providerId)) {
       _finish();
       _say(VoiceMessage(appL10n.commonEngineUnreachable));
       return;
@@ -438,7 +477,7 @@ class VoiceInputController extends ChangeNotifier with WidgetsBindingObserver {
         language: target.catalog.language,
       );
       if (!_current(operation)) return;
-      if (!target.current(client())) {
+      if (!_hostCurrent || !target.current(_speechClient(), _providerId)) {
         _finish();
         return;
       }

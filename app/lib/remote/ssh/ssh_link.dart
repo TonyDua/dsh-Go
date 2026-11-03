@@ -141,7 +141,9 @@ class SshHostLink implements HostLink {
   int? get localPort => _forwarder?.port;
 
   /// Configured working directory with `~` resolved on the remote.
-  String? get resolvedWorkingDirectory => RemoteDshBootstrap.absolutePath(_config.workingDirectory, _endpoint?.home);
+  String? get resolvedWorkingDirectory => _config.windowsAttachExisting
+      ? null
+      : RemoteDshBootstrap.absolutePath(_config.workingDirectory, _endpoint?.home);
 
   @override
   HostLinkStatus get status => _status;
@@ -254,10 +256,14 @@ class SshHostLink implements HostLink {
     try {
       final RemoteDshEndpoint endpoint;
       if (_config.windowsAttachExisting) {
-        if (transport is! SshRawCommand) {
-          throw HostLinkError(HostLinkErrorKind.other, appL10n.remoteWindowsAttachError);
+        if (_config.existingDshPlatform == 'posix') {
+          endpoint = await PosixDshAttach.resolve(transport, _config.existingDshLogPath ?? '');
+        } else {
+          if (transport is! SshRawCommand) {
+            throw HostLinkError(HostLinkErrorKind.other, appL10n.remoteWindowsAttachError);
+          }
+          endpoint = await WindowsDshAttach.resolve(transport as SshRawCommand, logPath: _config.existingDshLogPath);
         }
-        endpoint = await WindowsDshAttach.resolve(transport as SshRawCommand);
       } else {
         final bootstrap = RemoteDshBootstrap(
           transport,
