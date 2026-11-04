@@ -6881,6 +6881,12 @@ class L10nZh extends L10n {
   String get fileChatFallback => '对话';
 
   @override
+  String get hostDetailsConnectionType => '连接方式';
+
+  @override
+  String get hostDetailsSshNetworkHint => '通过 SSH 隧道连接。此连接不提供 LAN / P2P 路径检测或延迟测量。';
+
+  @override
   String get hubSessionDetails => '对话详情';
 
   @override
@@ -13476,6 +13482,54 @@ class L10nZh extends L10n {
   String get remoteNetworkObservedAt => '最近观测';
 
   @override
+  String get remoteWindowsAttachTitle => '复用远程机已存在的 DSH 实例';
+
+  @override
+  String get remoteWindowsAttachHelp => '通过 SSH 读取远端启动日志并连接已有实例，不启动或重启服务。';
+
+  @override
+  String get remoteWindowsAttachError => '无法读取或使用远程 DSH 启动日志，请检查日志路径、实例状态和 SSH 访问权限。';
+
+  @override
+  String get remoteExistingPlatform => '远端系统';
+
+  @override
+  String get remoteExistingWindows => 'Windows';
+
+  @override
+  String get remoteExistingPosix => 'macOS / Linux';
+
+  @override
+  String get remoteExistingLogPath => '远端启动日志路径';
+
+  @override
+  String get remoteExistingLogHelp => '填写包含 DSH 启动地址的日志文件路径；Windows 留空使用原默认路径。不要填写登录地址或令牌。';
+
+  @override
+  String get remoteExistingLogInvalid => '请填写有效的日志文件路径，不要填写登录地址或令牌；macOS / Linux 需要指定路径。';
+
+  @override
+  String get stateWorkspaceFilesHint => '已上传到当前工作区的文件：';
+
+  @override
+  String get stateRemoteUploadNameInvalid => '文件名不受主机支持，请去掉特殊字符或缩短后再试';
+
+  @override
+  String get stateRemoteUploadWorkspaceUnavailable => '当前对话没有可写的工作目录';
+
+  @override
+  String get stateRemoteUploadWorkspaceChanged => '工作目录已变化，请确认后重新上传';
+
+  @override
+  String get stateRemoteUploadLimit => '主机拒绝了上传，请检查文件大小或稍后重试';
+
+  @override
+  String get stateRemoteUploadUnsupported => '这台主机不支持文件上传，请更新主机上的 Remote 插件后重连';
+
+  @override
+  String get stateRemoteUploadTooLarge => '文件超过远程上传协议的大小上限';
+
+  @override
   String get riskDontShowAgain => '不再提示';
 
   @override
@@ -17725,13 +17779,13 @@ class L10nZh extends L10n {
   String get voiceModeEngine => '语音模型';
 
   @override
-  String get voiceModeAutoHint => '有语音模型时用它，否则用系统识别';
+  String get voiceModeAutoHint => '手机本地模型就绪时用它，否则用系统识别';
 
   @override
-  String get voiceModeSystemHint => '使用手机设置中的识别服务';
+  String get voiceModeSystemHint => '使用手机设置中的识别服务，该服务可能联网';
 
   @override
-  String get voiceModeEngineHint => '用引擎里的语音模型识别';
+  String get voiceModeEngineHint => '在手机本地引擎识别，需下载模型并启动本地引擎';
 
   @override
   String get voiceFallbackStarted => '已改用语音模型，请再说一次';
@@ -17740,10 +17794,10 @@ class L10nZh extends L10n {
   String get voiceChooseSystem => '请在系统设置中选择语音识别服务';
 
   @override
-  String get voiceConfigureEngine => '请先在语音设置里下载语音模型';
+  String get voiceConfigureEngine => '请先下载语音模型并启动手机本地引擎';
 
   @override
-  String get voiceConfigureEither => '系统识别用不了，可以在语音设置里下载语音模型';
+  String get voiceConfigureEither => '系统识别用不了，可下载语音模型并启动手机本地引擎';
 
   @override
   String get voiceErrorNetworkTimeout => '语音识别连接超时，请检查网络';

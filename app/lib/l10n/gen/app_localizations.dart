@@ -12602,6 +12602,18 @@ abstract class L10n {
   /// **'对话'**
   String get fileChatFallback;
 
+  /// No description provided for @hostDetailsConnectionType.
+  ///
+  /// In zh, this message translates to:
+  /// **'连接方式'**
+  String get hostDetailsConnectionType;
+
+  /// No description provided for @hostDetailsSshNetworkHint.
+  ///
+  /// In zh, this message translates to:
+  /// **'通过 SSH 隧道连接。此连接不提供 LAN / P2P 路径检测或延迟测量。'**
+  String get hostDetailsSshNetworkHint;
+
   /// No description provided for @hubSessionDetails.
   ///
   /// In zh, this message translates to:
@@ -24626,6 +24638,102 @@ abstract class L10n {
   /// **'最近观测'**
   String get remoteNetworkObservedAt;
 
+  /// No description provided for @remoteWindowsAttachTitle.
+  ///
+  /// In zh, this message translates to:
+  /// **'复用远程机已存在的 DSH 实例'**
+  String get remoteWindowsAttachTitle;
+
+  /// No description provided for @remoteWindowsAttachHelp.
+  ///
+  /// In zh, this message translates to:
+  /// **'通过 SSH 读取远端启动日志并连接已有实例，不启动或重启服务。'**
+  String get remoteWindowsAttachHelp;
+
+  /// No description provided for @remoteWindowsAttachError.
+  ///
+  /// In zh, this message translates to:
+  /// **'无法读取或使用远程 DSH 启动日志，请检查日志路径、实例状态和 SSH 访问权限。'**
+  String get remoteWindowsAttachError;
+
+  /// No description provided for @remoteExistingPlatform.
+  ///
+  /// In zh, this message translates to:
+  /// **'远端系统'**
+  String get remoteExistingPlatform;
+
+  /// No description provided for @remoteExistingWindows.
+  ///
+  /// In zh, this message translates to:
+  /// **'Windows'**
+  String get remoteExistingWindows;
+
+  /// No description provided for @remoteExistingPosix.
+  ///
+  /// In zh, this message translates to:
+  /// **'macOS / Linux'**
+  String get remoteExistingPosix;
+
+  /// No description provided for @remoteExistingLogPath.
+  ///
+  /// In zh, this message translates to:
+  /// **'远端启动日志路径'**
+  String get remoteExistingLogPath;
+
+  /// No description provided for @remoteExistingLogHelp.
+  ///
+  /// In zh, this message translates to:
+  /// **'填写包含 DSH 启动地址的日志文件路径；Windows 留空使用原默认路径。不要填写登录地址或令牌。'**
+  String get remoteExistingLogHelp;
+
+  /// No description provided for @remoteExistingLogInvalid.
+  ///
+  /// In zh, this message translates to:
+  /// **'请填写有效的日志文件路径，不要填写登录地址或令牌；macOS / Linux 需要指定路径。'**
+  String get remoteExistingLogInvalid;
+
+  /// No description provided for @stateWorkspaceFilesHint.
+  ///
+  /// In zh, this message translates to:
+  /// **'已上传到当前工作区的文件：'**
+  String get stateWorkspaceFilesHint;
+
+  /// No description provided for @stateRemoteUploadNameInvalid.
+  ///
+  /// In zh, this message translates to:
+  /// **'文件名不受主机支持，请去掉特殊字符或缩短后再试'**
+  String get stateRemoteUploadNameInvalid;
+
+  /// No description provided for @stateRemoteUploadWorkspaceUnavailable.
+  ///
+  /// In zh, this message translates to:
+  /// **'当前对话没有可写的工作目录'**
+  String get stateRemoteUploadWorkspaceUnavailable;
+
+  /// No description provided for @stateRemoteUploadWorkspaceChanged.
+  ///
+  /// In zh, this message translates to:
+  /// **'工作目录已变化，请确认后重新上传'**
+  String get stateRemoteUploadWorkspaceChanged;
+
+  /// No description provided for @stateRemoteUploadLimit.
+  ///
+  /// In zh, this message translates to:
+  /// **'主机拒绝了上传，请检查文件大小或稍后重试'**
+  String get stateRemoteUploadLimit;
+
+  /// No description provided for @stateRemoteUploadUnsupported.
+  ///
+  /// In zh, this message translates to:
+  /// **'这台主机不支持文件上传，请更新主机上的 Remote 插件后重连'**
+  String get stateRemoteUploadUnsupported;
+
+  /// No description provided for @stateRemoteUploadTooLarge.
+  ///
+  /// In zh, this message translates to:
+  /// **'文件超过远程上传协议的大小上限'**
+  String get stateRemoteUploadTooLarge;
+
   /// No description provided for @riskDontShowAgain.
   ///
   /// In zh, this message translates to:
@@ -32117,19 +32225,19 @@ abstract class L10n {
   /// No description provided for @voiceModeAutoHint.
   ///
   /// In zh, this message translates to:
-  /// **'有语音模型时用它，否则用系统识别'**
+  /// **'手机本地模型就绪时用它，否则用系统识别'**
   String get voiceModeAutoHint;
 
   /// No description provided for @voiceModeSystemHint.
   ///
   /// In zh, this message translates to:
-  /// **'使用手机设置中的识别服务'**
+  /// **'使用手机设置中的识别服务，该服务可能联网'**
   String get voiceModeSystemHint;
 
   /// No description provided for @voiceModeEngineHint.
   ///
   /// In zh, this message translates to:
-  /// **'用引擎里的语音模型识别'**
+  /// **'在手机本地引擎识别，需下载模型并启动本地引擎'**
   String get voiceModeEngineHint;
 
   /// No description provided for @voiceFallbackStarted.
@@ -32147,13 +32255,13 @@ abstract class L10n {
   /// No description provided for @voiceConfigureEngine.
   ///
   /// In zh, this message translates to:
-  /// **'请先在语音设置里下载语音模型'**
+  /// **'请先下载语音模型并启动手机本地引擎'**
   String get voiceConfigureEngine;
 
   /// No description provided for @voiceConfigureEither.
   ///
   /// In zh, this message translates to:
-  /// **'系统识别用不了，可以在语音设置里下载语音模型'**
+  /// **'系统识别用不了，可下载语音模型并启动手机本地引擎'**
   String get voiceConfigureEither;
 
   /// No description provided for @voiceErrorNetworkTimeout.

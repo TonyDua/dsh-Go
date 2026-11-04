@@ -62,7 +62,8 @@ case "$flavor" in
   all) flavors=(arm64 x64) ;;
   *) die "flavor is arm64, x64 or all: $flavor" ;;
 esac
-for arg in "${extra[@]}"; do
+# Bash 3.2 (macOS) treats an empty array as unset under `set -u`.
+for arg in ${extra[@]+"${extra[@]}"}; do
   case "$arg" in
     --build-number* | --build-name* | --flavor* | --target-platform*)
       die "$arg is set by this script; use its own options" ;;
@@ -109,7 +110,7 @@ for f in "${flavors[@]}"; do
     --build-name "$name" --build-number "$code" "--dart-define=DSH_APP_VERSION=$name+$code")
   [[ -n $target ]] && cmd+=(-t "$target")
   ((beta)) && cmd+=("--dart-define-from-file=$beta_json")
-  cmd+=("${extra[@]}")
+  cmd+=(${extra[@]+"${extra[@]}"})
   commands+=("$(printf '%q ' "${cmd[@]}")")
 done
 

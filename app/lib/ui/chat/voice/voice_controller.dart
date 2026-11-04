@@ -208,7 +208,9 @@ class VoiceInputController extends ChangeNotifier with WidgetsBindingObserver {
       // Missing speech bundle, unavailable provider, or disconnected host.
     }
     if (_disposed || !identical(_speechClient(), c) || !identical(c.mux.generation, generation) ||
-        probe != _catalogProbe || policy != _providerId) return null;
+        probe != _catalogProbe || policy != _providerId) {
+      return null;
+    }
     _catalog = target;
     return target;
   }
@@ -228,7 +230,9 @@ class VoiceInputController extends ChangeNotifier with WidgetsBindingObserver {
     }
     final c = _speechClient();
     if (_refreshing != null || (identical(c, _probedClient) && identical(c?.mux.generation, _probedGeneration) &&
-        _probedPolicy == _providerId)) return;
+        _probedPolicy == _providerId)) {
+      return;
+    }
     scheduleMicrotask(() => unawaited(refresh()));
   }
 

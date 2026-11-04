@@ -7273,6 +7273,13 @@ class L10nEn extends L10n {
   String get fileChatFallback => 'chat';
 
   @override
+  String get hostDetailsConnectionType => 'Connection type';
+
+  @override
+  String get hostDetailsSshNetworkHint =>
+      'Uses an SSH tunnel. LAN / P2P route inspection and latency measurements are not available for this connection.';
+
+  @override
   String get hubSessionDetails => 'Chat details';
 
   @override
@@ -14177,6 +14184,60 @@ class L10nEn extends L10n {
   String get remoteNetworkObservedAt => 'Last checked';
 
   @override
+  String get remoteWindowsAttachTitle => 'Reuse an existing remote DSH instance';
+
+  @override
+  String get remoteWindowsAttachHelp =>
+      'Read its startup log over SSH and connect without starting or restarting the service.';
+
+  @override
+  String get remoteWindowsAttachError =>
+      'Cannot read or use the remote DSH startup log. Check the path, instance and SSH access.';
+
+  @override
+  String get remoteExistingPlatform => 'Remote system';
+
+  @override
+  String get remoteExistingWindows => 'Windows';
+
+  @override
+  String get remoteExistingPosix => 'macOS / Linux';
+
+  @override
+  String get remoteExistingLogPath => 'Remote startup log path';
+
+  @override
+  String get remoteExistingLogHelp =>
+      'Path to the log containing the DSH launch URL; leave blank for the original Windows default. Do not enter a login URL or token.';
+
+  @override
+  String get remoteExistingLogInvalid =>
+      'Enter a valid log file path, not a login URL or token; macOS / Linux requires a path.';
+
+  @override
+  String get stateWorkspaceFilesHint => 'Files uploaded to the current workspace:';
+
+  @override
+  String get stateRemoteUploadNameInvalid =>
+      'The host rejected the filename. Shorten it or remove special characters and try again.';
+
+  @override
+  String get stateRemoteUploadWorkspaceUnavailable => 'This chat has no writable working directory';
+
+  @override
+  String get stateRemoteUploadWorkspaceChanged => 'The working directory changed. Check it before uploading again.';
+
+  @override
+  String get stateRemoteUploadLimit => 'The host refused the upload. Check the file size or try again later.';
+
+  @override
+  String get stateRemoteUploadUnsupported =>
+      'This host does not support file uploads. Update its Remote plugin and reconnect.';
+
+  @override
+  String get stateRemoteUploadTooLarge => 'The file exceeds the remote upload protocol\'s size limit';
+
+  @override
   String get riskDontShowAgain => 'Don’t show again';
 
   @override
@@ -18733,13 +18794,13 @@ class L10nEn extends L10n {
   String get voiceModeEngine => 'Voice model';
 
   @override
-  String get voiceModeAutoHint => 'Uses the voice model when it’s ready, otherwise the phone’s service';
+  String get voiceModeAutoHint => 'Uses the phone’s local model when ready, otherwise the system service';
 
   @override
-  String get voiceModeSystemHint => 'Use the recognition service selected on this phone';
+  String get voiceModeSystemHint => 'Uses the phone’s recognition service, which may use the network';
 
   @override
-  String get voiceModeEngineHint => 'Recognizes speech with the engine’s voice model';
+  String get voiceModeEngineHint => 'Uses the phone’s local engine; download the model and start the engine first';
 
   @override
   String get voiceFallbackStarted => 'Switched to the voice model. Please speak again.';
@@ -18748,10 +18809,11 @@ class L10nEn extends L10n {
   String get voiceChooseSystem => 'Select a speech recognition service in system settings';
 
   @override
-  String get voiceConfigureEngine => 'Download the voice model in voice settings first';
+  String get voiceConfigureEngine => 'Download the voice model and start the phone’s local engine first';
 
   @override
-  String get voiceConfigureEither => 'The phone’s service isn’t available. Download the voice model in voice settings.';
+  String get voiceConfigureEither =>
+      'The phone’s service isn’t available. Download the voice model and start the phone’s local engine.';
 
   @override
   String get voiceErrorNetworkTimeout => 'Speech recognition timed out. Check your connection.';
