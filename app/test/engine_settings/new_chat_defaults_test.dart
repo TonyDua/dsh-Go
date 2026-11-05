@@ -240,7 +240,9 @@ void main() {
     final host = await pumpDefaults(tester);
     await tester.tap(find.text('DeepSeek-V4.1-Flash'));
     await settle(tester);
-    await tester.tap(find.text('My Gateway'));
+    await tester.tap(
+      find.descendant(of: find.byKey(const ValueKey('model-categories')), matching: find.text('My Gateway')),
+    );
     await settle(tester);
     await tester.tap(find.text('Qwen3 Coder'));
     await settle(tester);
@@ -256,7 +258,9 @@ void main() {
     final host = await pumpDefaults(tester, effort: 'high');
     await tester.tap(find.text('DeepSeek-V4.1-Flash · ${appL10n.viewModelThinkingHigh}'));
     await settle(tester);
-    await tester.tap(find.text('My Gateway'));
+    await tester.tap(
+      find.descendant(of: find.byKey(const ValueKey('model-categories')), matching: find.text('My Gateway')),
+    );
     await settle(tester);
     await tester.tap(find.text('Qwen3 Coder'));
     await settle(tester);

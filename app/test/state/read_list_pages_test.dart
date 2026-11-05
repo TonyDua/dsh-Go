@@ -16,7 +16,6 @@ import 'package:dsh_app/state/subscriptions_state.dart';
 import 'package:dsh_app/state/workspaces_state.dart';
 import 'package:dsh_app/ui/chat/model_sheet.dart';
 import 'package:dsh_app/ui/common/list_page_row.dart';
-import 'package:dsh_app/ui/common/segmented_pill.dart';
 import 'package:dsh_app/ui/plugins/installed_tab.dart';
 import 'package:dsh_app/ui/plugins/plugins_screen.dart';
 import 'package:dsh_app/ui/providers/provider_detail_page.dart';
@@ -114,7 +113,6 @@ void main() {
     await tester.tap(find.text('open'));
     await tester.pumpAndSettle();
     final c = ProviderScope.containerOf(tester.element(find.byType(Consumer).first));
-    final scroll = _scroll(tester);
     host.paused.add('models');
     c.invalidate(modelCatalogProvider);
     c.read(modelCatalogProvider.future);
@@ -126,23 +124,32 @@ void main() {
     expect(find.textContaining('更新中'), findsOneWidget);
     await tester.tap(find.text('A Model 0'));
     expect(picks, 0, reason: 'stale display rows do not select a model');
-    await tester.tap(find.text('Secondary'));
+    await tester.tap(
+      find.descendant(of: find.byKey(const ValueKey('model-categories')), matching: find.text('Secondary')),
+    );
     await tester.pump(const Duration(milliseconds: 250));
-    final pill = tester.widget<SegmentedPill<String>>(find.byType(SegmentedPill<String>).first);
-    expect(pill.selected, 'q');
+    final category = find.descendant(
+      of: find.byKey(const ValueKey('model-categories')),
+      matching: find.byWidgetPredicate((widget) => widget is Semantics && widget.properties.label == 'Secondary'),
+    );
+    expect(tester.widget<Semantics>(category).properties.selected, isTrue);
+    final results = find.byKey(const ValueKey('model-results-host:q'));
+    ScrollableState currentScroll() =>
+        tester.state<ScrollableState>(find.descendant(of: results, matching: find.byType(Scrollable)));
+    final scroll = currentScroll();
     final before = scroll.position.pixels;
     await tester.drag(_scrollFinder(scroll), const Offset(0, -300));
     await tester.pump(const Duration(milliseconds: 200));
     expect(scroll.position.pixels, greaterThan(before));
     expect(waiting.isCompleted, isFalse);
-    expect(_scroll(tester), same(scroll));
+    expect(currentScroll(), same(scroll));
     _measure('models', tester, start, scroll, before);
     final held = scroll.position.pixels;
     await tester.pump(const Duration(seconds: 3));
     await tester.pumpAndSettle();
-    expect(_scroll(tester), same(scroll));
+    expect(currentScroll(), same(scroll));
     expect(scroll.position.pixels, closeTo(held, 0.01));
-    expect(tester.widget<SegmentedPill<String>>(find.byType(SegmentedPill<String>).first).selected, 'q');
+    expect(tester.widget<Semantics>(category).properties.selected, isTrue);
     expect(c.read(modelListViewProvider).readOnly, isFalse);
     await tester.pumpWidget(const SizedBox());
   });

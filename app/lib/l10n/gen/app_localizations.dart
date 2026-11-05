@@ -31232,6 +31232,84 @@ abstract class L10n {
   /// **'选择模型'**
   String get viewModelSelect;
 
+  /// No description provided for @viewModelSearch.
+  ///
+  /// In zh, this message translates to:
+  /// **'搜索模型、供应商、路由或 ID'**
+  String get viewModelSearch;
+
+  /// No description provided for @viewModelSearchCompact.
+  ///
+  /// In zh, this message translates to:
+  /// **'搜索模型'**
+  String get viewModelSearchCompact;
+
+  /// No description provided for @viewModelSearchShort.
+  ///
+  /// In zh, this message translates to:
+  /// **'搜索模型或路由'**
+  String get viewModelSearchShort;
+
+  /// No description provided for @viewModelCurrent.
+  ///
+  /// In zh, this message translates to:
+  /// **'当前'**
+  String get viewModelCurrent;
+
+  /// No description provided for @viewModelAll.
+  ///
+  /// In zh, this message translates to:
+  /// **'全部'**
+  String get viewModelAll;
+
+  /// No description provided for @viewModelFavorites.
+  ///
+  /// In zh, this message translates to:
+  /// **'星标'**
+  String get viewModelFavorites;
+
+  /// No description provided for @viewModelViaMagpie.
+  ///
+  /// In zh, this message translates to:
+  /// **'经 Magpie'**
+  String get viewModelViaMagpie;
+
+  /// No description provided for @viewModelRouting.
+  ///
+  /// In zh, this message translates to:
+  /// **'路由组'**
+  String get viewModelRouting;
+
+  /// No description provided for @viewModelNoMatches.
+  ///
+  /// In zh, this message translates to:
+  /// **'没有匹配的模型'**
+  String get viewModelNoMatches;
+
+  /// No description provided for @viewModelNoFavorites.
+  ///
+  /// In zh, this message translates to:
+  /// **'还没有星标模型'**
+  String get viewModelNoFavorites;
+
+  /// No description provided for @viewModelAddFavorite.
+  ///
+  /// In zh, this message translates to:
+  /// **'添加星标'**
+  String get viewModelAddFavorite;
+
+  /// No description provided for @viewModelRemoveFavorite.
+  ///
+  /// In zh, this message translates to:
+  /// **'取消星标'**
+  String get viewModelRemoveFavorite;
+
+  /// No description provided for @viewModelFavoriteFailed.
+  ///
+  /// In zh, this message translates to:
+  /// **'星标保存失败，请重试'**
+  String get viewModelFavoriteFailed;
+
   /// No description provided for @viewModelThinkingOff.
   ///
   /// In zh, this message translates to:

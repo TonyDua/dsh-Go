@@ -67,7 +67,9 @@ void main() {
     await tester.tap(find.text('Open'));
     await tester.pumpAndSettle();
     Semantics card() => tester.widget<Semantics>(
-      find.byWidgetPredicate((widget) => widget is Semantics && widget.properties.label == 'Gateway Flash'),
+      find.byWidgetPredicate(
+        (widget) => widget is Semantics && widget.properties.label == 'Gateway Flash, Gateway · deepseek-flash',
+      ),
     );
     expect(card().properties.selected, isFalse);
     expect(picked, isNull);

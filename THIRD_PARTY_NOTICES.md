@@ -170,6 +170,17 @@ DS Bot 的 NOTICE 原文附在文末。
 
 ## 二、素材
 
+### Lobe Icons 与 Magpie（MIT）
+
+| 项 | 内容 |
+|---|---|
+| 项目 | [Lobe Icons](https://github.com/lobehub/lobe-icons)；[Magpie](https://github.com/yetone/magpie) |
+| 版权人 | Copyright (c) 2023 LobeHub；Copyright (c) 2026 yetone |
+| 许可 | MIT；完整条款见下方 MIT License |
+| 用途 | `app/assets/model_brands/` 的模型与渠道标识，取自 Magpie 的 `9595a503a982c868cbe9b5465672d14fc2b4f855`；其文档注明品牌图标来自 Lobe Icons |
+
+品牌标识用于指明对应模型或提供商，相关商标属于各自权利人。
+
 ### Phosphor Icons（MIT）
 
 | 项 | 内容 |
@@ -341,6 +352,8 @@ Copyright (c) 2026 DSH Remote contributors                     (ds-harness-remot
 Copyright (c) 2026 qiannianhuanxiang                           (DSHA)
 Copyright (c) 2018 Civilized Discourse Construction Kit, Inc.  (discourse_docker)
 Copyright (c) 2023 Phosphor Icons                              (Phosphor Icons)
+Copyright (c) 2023 LobeHub                                     (Lobe Icons)
+Copyright (c) 2026 yetone                                      (Magpie)
 Copyright (c) 2021 RikkaW                                      (Shizuku-API)
 Copyright (c) 2018 湖北捷智云技术有限公司                        (flutter_webrtc)
 Copyright (c) 2015 Howard Yang                                 (react-native-webrtc)

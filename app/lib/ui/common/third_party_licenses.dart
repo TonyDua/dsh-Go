@@ -31,6 +31,8 @@ void registerThirdPartyLicenses() {
       LicenseEntryWithLineBreaks(<String>['flutter_webrtc'], _flutterWebrtcNotice + _apache2),
       LicenseEntryWithLineBreaks(<String>['AudioSwitch'], _audioSwitchNotice + _apache2),
       // Icons and data.
+      LicenseEntryWithLineBreaks(<String>['Lobe Icons'], _lobeIconsMit),
+      LicenseEntryWithLineBreaks(<String>['Magpie'], _magpieMit),
       LicenseEntryWithLineBreaks(<String>['Phosphor Icons'], _phosphorMit),
       LicenseEntryWithLineBreaks(<String>['Material Icons'], _materialIconsNotice + _apache2),
       LicenseEntryWithLineBreaks(<String>['discourse-emojis'], _discourseEmojisMit),
@@ -72,6 +74,20 @@ const _pipilotMit = '''
 MIT License
 
 Copyright (c) 2026 CikeSeven
+
+$_mitTerms''';
+
+const _lobeIconsMit = '''
+MIT License
+
+Copyright (c) 2023 LobeHub
+
+$_mitTerms''';
+
+const _magpieMit = '''
+MIT License
+
+Copyright (c) 2026 yetone
 
 $_mitTerms''';
 

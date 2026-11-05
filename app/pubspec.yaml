@@ -42,6 +42,8 @@ dependencies:
   # The following adds the Cupertino Icons font to your application.
   # Use with the CupertinoIcons class for iOS style icons.
   cupertino_icons: ^1.0.8
+  # Brand logos in the model picker; already used transitively by the app.
+  flutter_svg: ^2.3.2
   flutter_riverpod: ^3.4.3
   shared_preferences: ^2.5.6
   flutter_secure_storage: ^11.2.0
@@ -85,6 +87,7 @@ dependencies:
   flutter_webrtc: ^1.6.3
 
 dev_dependencies:
+  shared_preferences_platform_interface: ^2.4.2
   flutter_test:
     sdk: flutter
 
@@ -124,6 +127,8 @@ flutter:
           weight: 700
 
   assets:
+    # Provider and model marks (see THIRD_PARTY_NOTICES.md).
+    - assets/model_brands/
     # Full upstream WebRTC Android release notices, shown by LicenseRegistry.
     - assets/licenses/webrtc-150.7871.04.md
     # Phone layout for the embedded DSH Web (see lib/ui/web/web_view_page.dart).

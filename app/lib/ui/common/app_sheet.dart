@@ -47,6 +47,8 @@ class _InAppSheet extends InheritedWidget {
 /// [dismissal] selects one affordance: drag handle, or an explicit title key.
 /// Fixed-height sheets default to button; content-sized sheets default to drag.
 /// Button-only sheets cannot be dismissed by a drag or barrier tap.
+/// [hideHandleWhenKeyboard] reserves more room for fixed controls while the
+/// keyboard is visible. Drag and barrier dismissal still work.
 /// A draggable sheet holding unsaved input ([SheetDragHolds], e.g. a dirty
 /// `DiscardGuard`) asks before a drag closes it, like the handle and back do.
 ///
@@ -58,6 +60,7 @@ Future<T?> showAppSheet<T>(
   double? heightFactor,
   bool isScrollControlled = false,
   bool glass = true,
+  bool hideHandleWhenKeyboard = false,
   SheetDismissal? dismissal,
 }) {
   final policy = dismissal ?? (heightFactor == null ? SheetDismissal.drag : SheetDismissal.button);
@@ -107,7 +110,8 @@ Future<T?> showAppSheet<T>(
       final content = Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          if (draggable) SheetDragHandle(onDismiss: () => Navigator.of(context).maybePop()),
+          if (draggable && (!hideHandleWhenKeyboard || MediaQuery.viewInsetsOf(context).bottom == 0))
+            SheetDragHandle(onDismiss: () => Navigator.of(context).maybePop()),
           Flexible(child: builder(context)),
         ],
       );

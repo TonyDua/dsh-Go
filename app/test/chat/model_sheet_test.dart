@@ -1,5 +1,5 @@
-// The model sheet: channel filter, model cards, the capsule effort selector.
-// Behaviour, geometry (insets, equal cards, one dismissal handle) and goldens
+// The model sheet: source filters, model rows, and the capsule effort selector.
+// Behaviour, geometry (insets, stacked rows, one dismissal handle) and goldens
 // (light + dark). Regenerate with
 // `flutter test --update-goldens test/chat/model_sheet_test.dart`.
 
@@ -13,7 +13,6 @@ import 'package:dsh_app/ui/chat/widgets/whale_tail.dart';
 import 'package:dsh_app/ui/common/app_sheet.dart';
 import 'package:dsh_app/ui/common/segmented_pill.dart';
 import 'package:dsh_app/ui/common/sheet_title_bar.dart';
-import 'package:dsh_app/ui/theme/theme.dart';
 import 'package:dsh_client/dsh_client.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
@@ -141,7 +140,10 @@ Future<void> _openSheetAlone(WidgetTester tester, ModelCatalog catalog, {double 
   await pumpFrames(tester, 8);
 }
 
-Finder _card(String name) => find.ancestor(of: find.text(name), matching: find.byType(GlassSurface)).first;
+Finder _row(String name) => find.ancestor(of: find.text(name), matching: find.byType(Material)).first;
+
+Finder _category(String name) =>
+    find.descendant(of: find.byKey(const ValueKey('model-categories')), matching: find.text(name));
 
 ModelSelection? _picked(WidgetTester tester, ChatHarness harness) {
   final container = ProviderScope.containerOf(tester.element(find.byType(ChatScreen)));
@@ -200,10 +202,11 @@ void main() {
   });
 
   group('behaviour', () {
-    testWidgets('one channel: a label, no filter; cards and efforts', (tester) async {
+    testWidgets('one channel: searchable grouped rows and efforts', (tester) async {
       await _openSheet(tester, _harness(testCatalog));
       expect(find.text('选择模型'), findsOneWidget);
-      expect(find.text('DeepSeek'), findsOneWidget);
+      expect(_category('DeepSeek'), findsOneWidget);
+      expect(find.byKey(const ValueKey('model-search')), findsOneWidget);
       expect(find.text('V4 Pro'), findsOneWidget);
       expect(find.text('V41 Flash'), findsOneWidget);
       expect(find.text('思考深度'), findsOneWidget);
@@ -214,7 +217,7 @@ void main() {
       }
     });
 
-    testWidgets('the filter opens on the current channel and only filters', (tester) async {
+    testWidgets('source filters only the list and keeps the current selection', (tester) async {
       final harness = await _openSheet(
         tester,
         _harness(
@@ -222,11 +225,13 @@ void main() {
           model: const ModelSelection(provider: 'openrouter', model: 'z-ai/glm-4.6', reasoningEffort: 'off'),
         ),
       );
-      expect(find.byType(SegmentedPill<String>), findsNWidgets(2));
+      expect(find.byType(SegmentedPill<String>), findsOneWidget);
+      await tester.tap(_category('OpenRouter'));
+      await pumpFrames(tester, 4);
       expect(find.text('GLM 4.6'), findsOneWidget);
-      expect(find.text('V4 Pro'), findsNothing);
+      expect(find.text('V41 Flash'), findsNothing);
 
-      await tester.tap(find.text('DeepSeek'));
+      await tester.tap(_category('DeepSeek'));
       await pumpFrames(tester, 4);
       expect(find.text('V4 Pro'), findsOneWidget);
       expect(find.text('GLM 4.6'), findsNothing);
@@ -245,7 +250,7 @@ void main() {
 
     testWidgets('a model without efforts folds the effort selector away', (tester) async {
       final harness = await _openSheet(tester, _harness(multiCatalog));
-      await tester.tap(find.text('OpenRouter'));
+      await tester.tap(_category('OpenRouter'));
       await pumpFrames(tester, 4);
       await tester.tap(find.text('Kimi K2'));
       await pumpFrames(tester, 6);
@@ -269,7 +274,7 @@ void main() {
           model: const ModelSelection(provider: 'deepseek-official', model: 'deepseek-v4-pro', reasoningEffort: 'max'),
         ),
       );
-      await tester.tap(find.text('My Gateway'));
+      await tester.tap(_category('My Gateway'));
       await pumpFrames(tester, 4);
       await tester.tap(find.text('Qwen3 Coder'));
       await pumpFrames(tester, 6);
@@ -292,29 +297,40 @@ void main() {
       expect(find.text('V4 Pro · 最高'), findsOneWidget);
     });
 
-    testWidgets('cards read as selectable buttons to a screen reader', (tester) async {
+    testWidgets('model rows read as selectable buttons to a screen reader', (tester) async {
       final semantics = tester.ensureSemantics();
       final harness = await _openSheet(tester, _harness(testCatalog));
       expect(
-        tester.getSemantics(find.bySemanticsLabel('V4 Pro，更强的推理与编码')),
+        tester.getSemantics(find.bySemanticsLabel('V4 Pro, DeepSeek · deepseek-v4-pro')),
         isSemantics(isButton: true, isSelected: true, hasTapAction: true),
       );
-      final flash = find.bySemanticsLabel('V41 Flash，更快、更省');
+      final flash = find.bySemanticsLabel('V41 Flash, DeepSeek · deepseek-flash');
       expect(tester.getSemantics(flash), isSemantics(isButton: true, isSelected: false, hasTapAction: true));
-      tester.semantics.tap(find.semantics.byLabel('V41 Flash，更快、更省'));
+      tester.semantics.tap(find.semantics.byLabel('V41 Flash, DeepSeek · deepseek-flash'));
       await pumpFrames(tester, 2);
       expect(_picked(tester, harness)!.model, 'deepseek-flash');
       semantics.dispose();
     });
 
-    testWidgets('crowded channels scroll sideways instead of squeezing', (tester) async {
+    testWidgets('crowded channels and model results have separate vertical lists', (tester) async {
       await _openSheet(tester, _harness(crowdedCatalog));
       expect(find.byType(SegmentedPill<String>), findsOneWidget);
-      expect(find.byType(ListView), findsOneWidget);
-      await tester.tap(find.text('OpenRouter'));
+      expect(find.byType(ListView), findsNWidgets(2));
+      expect(tester.widget<ListView>(find.byKey(const ValueKey('model-categories'))).scrollDirection, Axis.vertical);
+      await tester.tap(_category('OpenRouter'));
       await pumpFrames(tester, 4);
       expect(find.text('Kimi K2'), findsOneWidget);
       expect(tester.takeException(), isNull);
+    });
+
+    testWidgets('common provider names fit on one line', (tester) async {
+      await _openSheet(tester, _harness(crowdedCatalog));
+      for (final name in ['OpenRouter', 'SiliconFlow']) {
+        final label = _category(name);
+        expect(label, findsOneWidget);
+        expect(tester.renderObject<RenderParagraph>(label).didExceedMaxLines, isFalse);
+        expect(tester.getSize(label).height, lessThan(20), reason: '$name must not wrap a trailing letter');
+      }
     });
 
     testWidgets('no key: one line and one button', (tester) async {
@@ -354,29 +370,24 @@ void main() {
         expect(tester.widget<Text>(text).maxLines, 2, reason: 'a long name may use a second line');
         expect(tester.renderObject<RenderParagraph>(text).didExceedMaxLines, isFalse, reason: '$name fits whole');
       }
-      // The description keeps its single line, cut with an ellipsis.
-      expect(tester.widget<Text>(find.text('长上下文，擅长复杂推理')).maxLines, 1);
+      // The channel and exact model ID remain visible in the subtitle.
+      expect(find.text('ChatGPT · gpt-5.6-terra'), findsOneWidget);
       expect(tester.takeException(), isNull);
     });
 
     for (final scale in [1.0, 1.3]) {
-      testWidgets('long names wrap whole and the row stays equal (text ×$scale)', (tester) async {
+      testWidgets('long names fit in stacked rows (text ×$scale)', (tester) async {
         await _openSheetAlone(tester, longNameCatalog, textScale: scale);
         for (final name in const ['GPT 5.6 Terra', 'GPT 6 Astra']) {
           final text = find.text(name);
           expect(tester.widget<Text>(text).maxLines, 2);
           expect(tester.renderObject<RenderParagraph>(text).didExceedMaxLines, isFalse, reason: '$name fits whole');
         }
-        final terra = tester.getRect(_card('GPT 5.6 Terra'));
-        final astra = tester.getRect(_card('GPT 6 Astra'));
+        final terra = tester.getRect(_row('GPT 5.6 Terra'));
+        final astra = tester.getRect(_row('GPT 6 Astra'));
         expect(terra.width, moreOrLessEquals(astra.width, epsilon: 0.5));
-        expect(
-          terra.height,
-          moreOrLessEquals(astra.height, epsilon: 0.5),
-          reason: 'the row is as tall as its taller name',
-        );
-        expect(terra.top, moreOrLessEquals(astra.top, epsilon: 0.5));
-        expect(astra.left - terra.right, moreOrLessEquals(12, epsilon: 0.5));
+        expect(terra.left, moreOrLessEquals(astra.left, epsilon: 0.5));
+        expect(astra.top, greaterThanOrEqualTo(terra.bottom));
         expect(tester.takeException(), isNull);
       });
     }
@@ -385,46 +396,38 @@ void main() {
       await _openSheetAlone(tester, longNameCatalog, textScale: 2);
       expect(find.text('GPT 5.6 Terra'), findsOneWidget);
       expect(find.text('GPT 6 Astra'), findsOneWidget);
-      final terra = tester.getRect(_card('GPT 5.6 Terra'));
-      final astra = tester.getRect(_card('GPT 6 Astra'));
-      expect(terra.width, moreOrLessEquals(astra.width, epsilon: 0.5));
-      expect(terra.height, moreOrLessEquals(astra.height, epsilon: 0.5));
-      expect(terra.top, moreOrLessEquals(astra.top, epsilon: 0.5));
+      final terra = tester.getRect(_row('GPT 5.6 Terra'));
+      final astra = tester.getRect(_row('GPT 6 Astra'));
+      expect(terra.left, moreOrLessEquals(astra.left, epsilon: 0.5));
+      expect(astra.top, greaterThanOrEqualTo(terra.bottom));
       expect(tester.takeException(), isNull);
     });
   });
 
   group('geometry', () {
     for (final scale in [1.0, 1.3]) {
-      testWidgets('20 in from both sides, equal cards (text ×$scale)', (tester) async {
+      testWidgets('20 in from both sides and stacked rows (text ×$scale)', (tester) async {
         tester.platformDispatcher.textScaleFactorTestValue = scale;
         addTearDown(tester.platformDispatcher.clearTextScaleFactorTestValue);
         await _openSheet(tester, _harness(multiCatalog));
         final width = tester.view.physicalSize.width / tester.view.devicePixelRatio;
 
-        final pro = tester.getRect(_card('V4 Pro'));
-        final flash = tester.getRect(_card('V41 Flash'));
-        expect(pro.left, moreOrLessEquals(SheetTitleBar.inset, epsilon: 0.5));
-        expect(width - flash.right, moreOrLessEquals(SheetTitleBar.inset, epsilon: 0.5));
+        final pro = tester.getRect(_row('V4 Pro'));
+        final flash = tester.getRect(_row('V41 Flash'));
+        final categories = tester.getRect(find.byKey(const ValueKey('model-categories')));
+        expect(categories.left, moreOrLessEquals(SheetTitleBar.inset, epsilon: 0.5));
+        expect(pro.left - categories.right, moreOrLessEquals(8, epsilon: 0.5));
+        expect(width - pro.right, moreOrLessEquals(SheetTitleBar.inset + 12, epsilon: 0.5));
         expect(pro.width, moreOrLessEquals(flash.width, epsilon: 0.5));
-        expect(pro.height, moreOrLessEquals(flash.height, epsilon: 0.5));
-        expect(pro.top, moreOrLessEquals(flash.top, epsilon: 0.5));
-        expect(flash.left - pro.right, moreOrLessEquals(12, epsilon: 0.5));
+        expect(flash.top, greaterThanOrEqualTo(pro.bottom));
+        expect(pro.height, greaterThanOrEqualTo(48));
 
-        // Filter and effort pill span exactly the cards' width.
-        final pills = find.byType(SegmentedPill<String>);
-        for (var i = 0; i < pills.evaluate().length; i++) {
-          final pill = tester.getRect(pills.at(i));
-          expect(pill.left, moreOrLessEquals(pro.left, epsilon: 0.5));
-          expect(pill.right, moreOrLessEquals(flash.right, epsilon: 0.5));
-        }
-
-        // Removing the close key must also reclaim its column and gutter.
+        // A single drag handle dismisses the sheet; management is in the title bar.
         final title = tester.getRect(find.text('选择模型'));
         expect(find.byType(SheetDragHandle), findsOneWidget);
         expect(find.byTooltip('关闭'), findsNothing);
         expect(title.left, moreOrLessEquals(SheetTitleBar.inset, epsilon: 0.5));
-        expect(width - title.right, moreOrLessEquals(SheetTitleBar.inset, epsilon: 0.5));
+        expect(title.right, lessThanOrEqualTo(tester.getRect(find.text('管理模型')).left));
         expect(tester.takeException(), isNull);
       });
     }

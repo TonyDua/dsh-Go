@@ -17179,6 +17179,45 @@ class L10nZh extends L10n {
   String get viewModelSelect => '选择模型';
 
   @override
+  String get viewModelSearch => '搜索模型、供应商、路由或 ID';
+
+  @override
+  String get viewModelSearchCompact => '搜索模型';
+
+  @override
+  String get viewModelSearchShort => '搜索模型或路由';
+
+  @override
+  String get viewModelCurrent => '当前';
+
+  @override
+  String get viewModelAll => '全部';
+
+  @override
+  String get viewModelFavorites => '星标';
+
+  @override
+  String get viewModelViaMagpie => '经 Magpie';
+
+  @override
+  String get viewModelRouting => '路由组';
+
+  @override
+  String get viewModelNoMatches => '没有匹配的模型';
+
+  @override
+  String get viewModelNoFavorites => '还没有星标模型';
+
+  @override
+  String get viewModelAddFavorite => '添加星标';
+
+  @override
+  String get viewModelRemoveFavorite => '取消星标';
+
+  @override
+  String get viewModelFavoriteFailed => '星标保存失败，请重试';
+
+  @override
   String get viewModelThinkingOff => '不思考';
 
   @override

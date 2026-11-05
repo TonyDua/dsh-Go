@@ -18161,6 +18161,45 @@ class L10nEn extends L10n {
   String get viewModelSelect => 'Choose model';
 
   @override
+  String get viewModelSearch => 'Search models, sources, routes, or IDs';
+
+  @override
+  String get viewModelSearchCompact => 'Search models';
+
+  @override
+  String get viewModelSearchShort => 'Search models or routes';
+
+  @override
+  String get viewModelCurrent => 'Current';
+
+  @override
+  String get viewModelAll => 'All';
+
+  @override
+  String get viewModelFavorites => 'Starred';
+
+  @override
+  String get viewModelViaMagpie => 'via Magpie';
+
+  @override
+  String get viewModelRouting => 'Routing';
+
+  @override
+  String get viewModelNoMatches => 'No matching models';
+
+  @override
+  String get viewModelNoFavorites => 'No starred models yet';
+
+  @override
+  String get viewModelAddFavorite => 'Add to starred';
+
+  @override
+  String get viewModelRemoveFavorite => 'Remove from starred';
+
+  @override
+  String get viewModelFavoriteFailed => 'Couldn\'t save the star. Try again.';
+
+  @override
   String get viewModelThinkingOff => 'Off';
 
   @override

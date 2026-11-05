@@ -11,11 +11,12 @@ import 'package:flutter/rendering.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../l10n/l10n.dart';
+import '../../state/hosts_state.dart';
+import '../../state/model_favorites.dart';
 import '../../state/models_state.dart';
 import '../../state/settings_state.dart';
 import '../common/app_sheet.dart';
 import '../common/empty_view.dart';
-import '../common/pressable.dart';
 import '../common/segmented_pill.dart';
 import '../common/sheet_title_bar.dart';
 import '../common/smooth_size.dart';
@@ -26,6 +27,12 @@ import '../providers/provider_form_page.dart';
 import '../providers/providers_page.dart';
 import '../theme/app_icons.dart';
 import '../theme/theme.dart';
+import 'model_brand.dart';
+import 'model_picker_data.dart';
+
+// Scrollbar paints inside its viewport. Keep its track clear of tappable rows
+// and selection backgrounds on both sides of the picker.
+const _pickerScrollbarGutter = 12.0;
 
 /// 模型名的短写:去掉 "DeepSeek-" 前缀,连字符换空格,首字母大写。
 /// `DeepSeek-V4-Pro` → `V4 Pro`。
@@ -344,26 +351,13 @@ Future<void> showModelSheet(
   return showAppSheet<void>(
     context,
     isScrollControlled: true,
+    hideHandleWhenKeyboard: true,
     builder: (context) => _ModelSheet(current: current, onSelected: onSelected, confirmSelection: confirmSelection),
   );
 }
 
-/// ```
-///                    ───
-///   选择模型                               (×)
-///
-///   ((  DeepSeek  )   OpenRouter            )    渠道多于一个时
-///
-///   ╭─────────────────╮  ╭─────────────────╮
-///   │ V4 Pro       (✓)│  │ V41 Flash    ( )│
-///   │ 更强的推理与编码  │  │ 更快、更省        │
-///   ╰─────────────────╯  ╰─────────────────╯
-///
-///   思考深度
-///   (( 不思考 )  低      ( 高 )     最高   )
-/// ```
-///
-/// 渠道条只是筛选,不改当前选择;打开时停在当前模型所在的渠道。
+/// Searchable, grouped model picker. Filtering and local favorites never
+/// rewrite a model's original host/provider route.
 class _ModelSheet extends ConsumerStatefulWidget {
   const _ModelSheet({required this.current, required this.onSelected, required this.confirmSelection});
 
@@ -378,11 +372,15 @@ class _ModelSheet extends ConsumerStatefulWidget {
 class _ModelSheetState extends ConsumerState<_ModelSheet> {
   late ModelSelection? _selection = widget.current;
   late final Object _scope = ref.read(modelSelectionScopeProvider);
+  late final HostRef _host = ref.read(activeHostProvider);
+  final _query = TextEditingController();
+  final _categoryScroll = ScrollController();
+  final _resultScroll = ScrollController(keepScrollOffset: false);
 
   bool get _active => identical(_scope, ref.read(modelSelectionScopeProvider));
 
-  /// The channel being browsed; null follows the selected model's.
-  String? _channel;
+  /// Browsing and searching do not change the selected model.
+  String _category = 'all';
 
   /// Closes the sheet once the effort thumb has landed.
   Timer? _close;
@@ -390,6 +388,9 @@ class _ModelSheetState extends ConsumerState<_ModelSheet> {
   @override
   void dispose() {
     _close?.cancel();
+    _query.dispose();
+    _categoryScroll.dispose();
+    _resultScroll.dispose();
     super.dispose();
   }
 
@@ -407,8 +408,9 @@ class _ModelSheetState extends ConsumerState<_ModelSheet> {
     );
     setState(() {
       _selection = next;
-      _channel = model.provider;
     });
+    _close?.cancel();
+    FocusManager.instance.primaryFocus?.unfocus();
     if (!widget.confirmSelection) widget.onSelected(next);
   }
 
@@ -437,9 +439,20 @@ class _ModelSheetState extends ConsumerState<_ModelSheet> {
     final view = ref.watch(modelListViewProvider);
     final catalog = view.value;
     final active = identical(_scope, ref.watch(modelSelectionScopeProvider));
+    final groups = catalog == null
+        ? const <ProviderGroup>[]
+        : [
+            for (final g in catalog.groups)
+              if (g.models.isNotEmpty) g,
+          ];
 
+    if (catalog != null && groups.isNotEmpty) {
+      return UiTrace(
+        scope: 'models',
+        child: _picker(catalog, findModel(catalog, _selection), readOnly: view.readOnly || !active),
+      );
+    }
     final Widget body;
-    var picking = false;
     if (catalog == null) {
       body = catalogAsync.isLoading
           ? const _Loading()
@@ -460,166 +473,499 @@ class _ModelSheetState extends ConsumerState<_ModelSheet> {
               message: l10n.viewModelConnectHint,
             );
     } else {
-      final groups = [
-        for (final group in catalog.groups)
-          if (group.models.isNotEmpty) group,
-      ];
-      if (groups.isEmpty) {
-        body = _EmptyCatalog(
-          // A failing provider counts: something is set up, just not working.
-          configured: ref.watch(settingsProvider.select((s) => s.hasModelAccess)) || catalog.failures.isNotEmpty,
-          failure: catalog.failures.isEmpty ? null : catalog.failures.first.message,
-        );
-      } else {
-        picking = true;
-        body = _picker(groups, findModel(catalog, _selection), readOnly: view.readOnly || !active);
-      }
+      body = _EmptyCatalog(
+        configured: ref.watch(settingsProvider.select((s) => s.hasModelAccess)) || catalog.failures.isNotEmpty,
+        failure: catalog.failures.isEmpty ? null : catalog.failures.first.message,
+      );
     }
-
-    final sheet = SafeArea(
-      top: false,
-      child: SingleChildScrollView(
-        padding: const EdgeInsets.only(bottom: 20),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            SheetTitleBar(catalog == null ? l10n.viewModelSelect : readListHeading(l10n.viewModelSelect, view.status)),
-            body,
-            if (picking && widget.confirmSelection && !isValidModelSelection(catalog, _selection))
-              Padding(
-                padding: const EdgeInsets.fromLTRB(SheetTitleBar.inset, 16, SheetTitleBar.inset, 0),
-                child: Text(l10n.engineNewChatDefaultsSelectionUnavailable),
+    return UiTrace(
+      scope: 'models',
+      child: SafeArea(
+        top: false,
+        child: SingleChildScrollView(
+          padding: const EdgeInsets.only(bottom: 20),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              SheetTitleBar(
+                catalog == null ? l10n.viewModelSelect : readListHeading(l10n.viewModelSelect, view.status),
               ),
-            if (picking && widget.confirmSelection)
-              Padding(
-                padding: const EdgeInsets.fromLTRB(SheetTitleBar.inset, 20, SheetTitleBar.inset, 0),
-                child: FilledButton(
-                  onPressed: !active || view.readOnly || !isValidModelSelection(catalog, _selection)
-                      ? null
-                      : () {
-                          final currentView = ref.read(modelListViewProvider);
-                          if (!_active ||
-                              currentView.readOnly ||
-                              !isValidModelSelection(currentView.value, _selection)) {
-                            return;
-                          }
-                          widget.onSelected(_selection!);
-                          Navigator.of(context).pop();
-                        },
-                  child: Text(l10n.commonSave),
-                ),
-              ),
-            // 「管理模型 ›」: 设置 › 模型, over the sheet (back returns here).
-            if (picking) ...[const SizedBox(height: 12), const ManageModelsLink()],
-          ],
+              body,
+            ],
+          ),
         ),
       ),
     );
-    return UiTrace(scope: 'models', child: sheet);
   }
 
-  Widget _picker(List<ProviderGroup> groups, ModelInfo? selected, {required bool readOnly}) {
-    final shownId = _channel ?? selected?.provider;
-    final shown = groups.firstWhere((g) => g.id == shownId, orElse: () => groups.first);
-    final efforts = selected?.efforts ?? const <ReasoningEffort>[];
-    final quick = AppMotion.of(context, AppMotion.quick);
-    const inset = SheetTitleBar.inset;
+  Future<void> _favorite(PickerModel entry) async {
+    try {
+      await ref.read(modelFavoritesProvider.notifier).toggle(modelFavoriteKey(_host, entry.model));
+    } catch (_) {
+      if (mounted) {
+        ScaffoldMessenger.maybeOf(context)?.showSnackBar(SnackBar(content: Text(context.l10n.viewModelFavoriteFailed)));
+      }
+    }
+  }
 
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        if (groups.length > 1)
-          Padding(
-            padding: const EdgeInsets.only(top: 4, bottom: 16),
-            child: _ChannelBar(groups: groups, shown: shown.id, onChanged: (id) => setState(() => _channel = id)),
-          )
-        else
-          SheetSectionLabel(shown.name),
-        Padding(
-          padding: const EdgeInsets.symmetric(horizontal: inset),
-          child: SmoothSize(
-            duration: AppMotion.of(context, AppMotion.standard),
-            curve: AppMotion.std,
-            alignment: Alignment.topCenter,
-            child: AnimatedSwitcher(
-              duration: quick,
-              switchInCurve: AppMotion.enter,
-              switchOutCurve: AppMotion.exit,
-              layoutBuilder: (current, previous) =>
-                  Stack(alignment: Alignment.topCenter, children: [...previous, ?current]),
-              child: _ModelGrid(
-                key: ValueKey(shown.id),
-                models: shown.models,
-                selected: selected,
-                onPick: readOnly ? null : _pickModel,
-              ),
-            ),
-          ),
+  Widget _picker(ModelCatalog catalog, ModelInfo? selected, {required bool readOnly}) {
+    final l10n = context.l10n;
+    final view = ref.watch(modelListViewProvider);
+    final favorites = ref.watch(modelFavoritesProvider);
+    final groups = modelPickerGroups(catalog);
+    final media = MediaQuery.of(context);
+    final keyboardOpen = media.viewInsets.bottom > 0;
+    final space = math.max(
+      0.0,
+      media.size.height - media.padding.top - media.viewInsets.bottom - (keyboardOpen ? 8 : 64),
+    );
+    final height = math.min(media.size.height * .82, space);
+    final textScale = media.textScaler.scale(11) / 11;
+    final railWidth = 76.0 + 16 * (textScale - 1).clamp(0.0, 1.0) + _pickerScrollbarGutter;
+    final compactControls = keyboardOpen || (height < 520 && (textScale >= 1.3 || media.size.height < 440));
+    final categories = [
+      _PickerCategory(key: 'all', name: l10n.viewModelAll, glyph: AppIcons.modelItem),
+      _PickerCategory(key: 'favorites', name: l10n.viewModelFavorites, glyph: AppIcons.favorite),
+      for (final group in groups)
+        _PickerCategory(
+          key: group.key,
+          name: group.routing ? l10n.viewModelRouting : group.name,
+          iconId: group.iconId,
+          routing: group.routing,
+          detail: group.viaMagpie
+              ? '${group.routing ? l10n.viewModelRouting : group.name} · ${l10n.viewModelViaMagpie}'
+              : null,
         ),
-        // Fades out first, then the height folds away (and the reverse on the
-        // way in), so nothing below jumps.
-        SmoothSize(
-          duration: AppMotion.of(context, AppMotion.collapse),
-          curve: AppMotion.collapseCurve,
-          alignment: Alignment.topCenter,
-          child: AnimatedSwitcher(
-            duration: quick,
-            layoutBuilder: (current, previous) =>
-                Stack(alignment: Alignment.topCenter, children: [...previous, ?current]),
-            child: efforts.length < 2
-                ? const SizedBox(key: ValueKey('none'), width: double.infinity)
-                : Column(
-                    key: const ValueKey('effort'),
+    ];
+    final category = categories.any((c) => c.key == _category) ? _category : 'all';
+    final query = _query.text.trim();
+    final rows = <({PickerGroup group, PickerModel? model})>[];
+    for (final group in groups) {
+      if (category != 'all' && category != 'favorites' && category != group.key) continue;
+      final matching = [
+        for (final item in group.models)
+          if ((category != 'favorites' || favorites.contains(modelFavoriteKey(_host, item.model))) &&
+              item.matches(query))
+            item,
+      ];
+      if (matching.isEmpty) continue;
+      if (!keyboardOpen || height > 260) rows.add((group: group, model: null));
+      rows.addAll([for (final item in matching) (group: group, model: item)]);
+    }
+    final efforts = selected?.efforts ?? const <ReasoningEffort>[];
+    var currentChannel = selected?.provider ?? '';
+    if (selected != null) {
+      for (final group in catalog.groups) {
+        if (group.models.any((model) => identical(model, selected))) {
+          currentChannel = group.name;
+          break;
+        }
+      }
+    }
+    return Padding(
+      padding: EdgeInsets.only(bottom: media.viewInsets.bottom),
+      child: SizedBox(
+        height: height,
+        child: SafeArea(
+          top: false,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              if (!keyboardOpen)
+                SheetTitleBar(readListHeading(l10n.viewModelSelect, view.status), actions: const [ManageModelsLink()]),
+              Padding(
+                padding: EdgeInsets.fromLTRB(
+                  SheetTitleBar.inset,
+                  0,
+                  SheetTitleBar.inset,
+                  keyboardOpen
+                      ? 2
+                      : compactControls
+                      ? 8
+                      : 12,
+                ),
+                child: TextField(
+                  key: const ValueKey('model-search'),
+                  controller: _query,
+                  onChanged: (_) => setState(() {}),
+                  decoration: InputDecoration(
+                    hintText: media.size.width < 360 && textScale > 1.5
+                        ? l10n.viewModelSearchCompact
+                        : media.size.width < 360 || textScale > 1.5
+                        ? l10n.viewModelSearchShort
+                        : l10n.viewModelSearch,
+                    prefixIcon: const Icon(AppIcons.search, size: 20),
+                    suffixIcon: _query.text.isEmpty
+                        ? null
+                        : IconButton(
+                            tooltip: l10n.commonClear,
+                            onPressed: () => setState(_query.clear),
+                            icon: const Icon(AppIcons.clear, size: 18),
+                          ),
+                    isDense: true,
+                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(16), borderSide: BorderSide.none),
+                    filled: true,
+                  ),
+                ),
+              ),
+              if (selected != null && !keyboardOpen && height > 380)
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(SheetTitleBar.inset, 0, SheetTitleBar.inset, 8),
+                  child: Tooltip(
+                    message: '${l10n.viewModelCurrent}: ${shortModelName(selected.name)} · $currentChannel',
+                    child: Semantics(
+                      label: '${l10n.viewModelCurrent}: ${shortModelName(selected.name)} · $currentChannel',
+                      excludeSemantics: true,
+                      child: Text(
+                        '${l10n.viewModelCurrent}: ${shortModelName(selected.name)}${compactControls ? '' : ' · $currentChannel'}',
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: Theme.of(context).textTheme.bodySmall
+                            ?.copyWith(color: DshColors.of(context).textTertiary),
+                      ),
+                    ),
+                  ),
+                ),
+              Expanded(
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: SheetTitleBar.inset),
+                  child: Row(
                     crossAxisAlignment: CrossAxisAlignment.stretch,
-                    mainAxisSize: MainAxisSize.min,
                     children: [
-                      const SizedBox(height: 16),
-                      SheetSectionLabel(appL10n.viewModelEffort),
-                      Padding(
-                        padding: const EdgeInsets.symmetric(horizontal: inset),
-                        child: SegmentedPill<String>(
-                          height: 40,
-                          segments: [for (final e in efforts) PillSegment(e.id, effortLabel(e.id, e.name))],
-                          selected: _selection?.reasoningEffort ?? selected?.defaultEffort ?? efforts.first.id,
-                          onChanged: readOnly
-                              ? null
-                              : (effort) {
-                                  if (identical(
-                                    findModel(ref.read(modelListViewProvider).value, _selection),
-                                    selected,
-                                  )) {
-                                    _pickEffort(effort);
-                                  }
-                                },
+                      SizedBox(
+                        width: railWidth,
+                        child: Scrollbar(
+                          controller: _categoryScroll,
+                          thumbVisibility: true,
+                          thickness: 3,
+                          radius: const Radius.circular(3),
+                          child: ListView.builder(
+                            key: const ValueKey('model-categories'),
+                            controller: _categoryScroll,
+                            padding: const EdgeInsetsDirectional.only(end: _pickerScrollbarGutter),
+                            itemCount: categories.length,
+                            itemBuilder: (context, i) => _CategoryTile(
+                              category: categories[i],
+                              selected: categories[i].key == category,
+                              onTap: () => setState(() => _category = categories[i].key),
+                            ),
+                          ),
                         ),
+                      ),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: rows.isEmpty
+                            ? Center(
+                                child: Text(
+                                  category == 'favorites' && query.isEmpty
+                                      ? l10n.viewModelNoFavorites
+                                      : l10n.viewModelNoMatches,
+                                  textAlign: TextAlign.center,
+                                  style: Theme.of(context).textTheme.bodyMedium
+                                      ?.copyWith(color: DshColors.of(context).textTertiary),
+                                ),
+                              )
+                            : Scrollbar(
+                                controller: _resultScroll,
+                                thumbVisibility: true,
+                                thickness: 3,
+                                radius: const Radius.circular(3),
+                                child: ListView.builder(
+                                  key: ValueKey('model-results-$category'),
+                                  controller: _resultScroll,
+                                  padding: const EdgeInsetsDirectional.only(end: _pickerScrollbarGutter),
+                                  itemCount: rows.length,
+                                  itemBuilder: (context, i) {
+                                    final row = rows[i];
+                                    final item = row.model;
+                                    if (item == null) {
+                                      final label = row.group.routing ? l10n.viewModelRouting : row.group.name;
+                                      final name = row.group.viaMagpie ? '$label · ${l10n.viewModelViaMagpie}' : label;
+                                      return Padding(
+                                        padding: EdgeInsets.fromLTRB(
+                                          8,
+                                          compactControls ? 4 : 8,
+                                          4,
+                                          compactControls ? 2 : 6,
+                                        ),
+                                        child: Semantics(
+                                          label: name,
+                                          header: true,
+                                          excludeSemantics: true,
+                                          child: Text(compactControls ? label : name, style: groupTitleStyle(context)),
+                                        ),
+                                      );
+                                    }
+                                    final m = item.model;
+                                    return _PickerModelRow(
+                                      item: item,
+                                      selected: selected?.id == m.id && selected?.provider == m.provider,
+                                      starred: favorites.contains(modelFavoriteKey(_host, m)),
+                                      onPick: readOnly ? null : () => _pickModel(m),
+                                      onFavorite: () => unawaited(_favorite(item)),
+                                    );
+                                  },
+                                ),
+                              ),
                       ),
                     ],
                   ),
+                ),
+              ),
+              if (efforts.length > 1)
+                Padding(
+                  padding: EdgeInsets.fromLTRB(
+                    SheetTitleBar.inset,
+                    keyboardOpen
+                        ? 2
+                        : compactControls
+                        ? 4
+                        : 8,
+                    SheetTitleBar.inset,
+                    0,
+                  ),
+                  child: _PickerEfforts(
+                    efforts: efforts,
+                    selected: _selection?.reasoningEffort ?? selected?.defaultEffort ?? efforts.first.id,
+                    onChanged: readOnly ? null : _pickEffort,
+                    compact: compactControls,
+                  ),
+                ),
+              if (!keyboardOpen && widget.confirmSelection && !isValidModelSelection(catalog, _selection))
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(SheetTitleBar.inset, 8, SheetTitleBar.inset, 0),
+                  child: Text(l10n.engineNewChatDefaultsSelectionUnavailable),
+                ),
+              if (!keyboardOpen && widget.confirmSelection)
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(SheetTitleBar.inset, 8, SheetTitleBar.inset, 0),
+                  child: FilledButton(
+                    onPressed: readOnly || !isValidModelSelection(catalog, _selection)
+                        ? null
+                        : () {
+                            final currentView = ref.read(modelListViewProvider);
+                            if (!_active ||
+                                currentView.readOnly ||
+                                !isValidModelSelection(currentView.value, _selection)) {
+                              return;
+                            }
+                            widget.onSelected(_selection!);
+                            Navigator.of(context).pop();
+                          },
+                    child: Text(l10n.commonSave),
+                  ),
+                ),
+              SizedBox(
+                height: keyboardOpen
+                    ? 2
+                    : compactControls
+                    ? 8
+                    : 12,
+              ),
+            ],
           ),
         ),
-      ],
+      ),
     );
   }
 }
 
-/// 选择模型底部的「管理模型 ›」:居中的文字键,去 设置 › 模型。
+/// The model-management entry in the picker title bar.
 class ManageModelsLink extends StatelessWidget {
   const ManageModelsLink({super.key});
 
   @override
   Widget build(BuildContext context) {
     final l10n = context.l10n;
-    return Center(
-      child: TextButton(
-        onPressed: () => Navigator.of(context).push(MaterialPageRoute<void>(builder: (_) => const ProvidersPage())),
+    return TextButton(
+      onPressed: () => Navigator.of(context).push(MaterialPageRoute<void>(builder: (_) => const ProvidersPage())),
+      child: Text(l10n.nearbyManageModels),
+    );
+  }
+}
+
+class _PickerCategory {
+  const _PickerCategory({
+    required this.key,
+    required this.name,
+    this.glyph,
+    this.iconId,
+    this.detail,
+    this.routing = false,
+  });
+
+  final String key;
+  final String name;
+  final IconData? glyph;
+  final String? iconId;
+  final String? detail;
+  final bool routing;
+}
+
+class _CategoryTile extends StatelessWidget {
+  const _CategoryTile({required this.category, required this.selected, required this.onTap});
+
+  final _PickerCategory category;
+  final bool selected;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = Theme.of(context).colorScheme;
+    return Tooltip(
+      message: category.detail ?? category.name,
+      child: Semantics(
+        button: true,
+        selected: selected,
+        label: category.detail ?? category.name,
+        onTap: onTap,
+        excludeSemantics: true,
+        child: Padding(
+          padding: const EdgeInsets.only(bottom: 4),
+          child: Material(
+            color: selected ? colors.primary.withValues(alpha: .13) : Colors.transparent,
+            borderRadius: BorderRadius.circular(14),
+            child: InkWell(
+              onTap: onTap,
+              borderRadius: BorderRadius.circular(14),
+              child: ConstrainedBox(
+                constraints: const BoxConstraints(minHeight: 58),
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 7),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      if (category.glyph case final glyph?)
+                        Icon(glyph, size: 20, color: selected ? colors.primary : colors.onSurfaceVariant)
+                      else
+                        ModelBrand(
+                          label: category.name,
+                          icon: modelProviderIcon(category.iconId ?? ''),
+                          routing: category.routing,
+                          size: 24,
+                        ),
+                      const SizedBox(height: 3),
+                      Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 2),
+                        child: Text(
+                          category.name,
+                          maxLines: 2,
+                          textAlign: TextAlign.center,
+                          overflow: TextOverflow.ellipsis,
+                          style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                            color: selected ? colors.primary : colors.onSurfaceVariant,
+                            fontWeight: selected ? FontWeight.w600 : FontWeight.w500,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _PickerModelRow extends StatelessWidget {
+  const _PickerModelRow({
+    required this.item,
+    required this.selected,
+    required this.starred,
+    required this.onPick,
+    required this.onFavorite,
+  });
+
+  final PickerModel item;
+  final bool selected;
+  final bool starred;
+  final VoidCallback? onPick;
+  final VoidCallback onFavorite;
+
+  @override
+  Widget build(BuildContext context) {
+    final model = item.model;
+    final colors = Theme.of(context).colorScheme;
+    final name = shortModelName(model.name);
+    final source = '${item.channel} · ${model.id}';
+    final favoriteLabel = starred ? context.l10n.viewModelRemoveFavorite : context.l10n.viewModelAddFavorite;
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 3),
+      child: Material(
+        color: selected ? colors.primary.withValues(alpha: .10) : Colors.transparent,
+        borderRadius: BorderRadius.circular(14),
         child: Row(
-          mainAxisSize: MainAxisSize.min,
           children: [
-            Text(l10n.nearbyManageModels),
-            const SizedBox(width: 2),
-            const Icon(AppIcons.disclosure, size: 14),
+            Expanded(
+              child: Semantics(
+                button: true,
+                enabled: onPick != null,
+                selected: selected,
+                inMutuallyExclusiveGroup: true,
+                label: '$name, $source',
+                onTap: onPick,
+                excludeSemantics: true,
+                child: InkWell(
+                  onTap: onPick,
+                  borderRadius: BorderRadius.circular(14),
+                  child: Padding(
+                    padding: const EdgeInsets.fromLTRB(8, 9, 0, 9),
+                    child: Row(
+                      children: [
+                        ModelBrand(
+                          label: name,
+                          icon: item.routing ? null : modelFamilyIcon(model),
+                          routing: item.routing,
+                          size: 30,
+                        ),
+                        const SizedBox(width: 9),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                name,
+                                maxLines: 2,
+                                overflow: TextOverflow.ellipsis,
+                                style: Theme.of(context).textTheme.titleSmall,
+                              ),
+                              const SizedBox(height: 2),
+                              Text(
+                                source,
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: Theme.of(context).textTheme.bodySmall
+                                    ?.copyWith(color: DshColors.of(context).textTertiary),
+                              ),
+                            ],
+                          ),
+                        ),
+                        if (selected) ...[
+                          const SizedBox(width: 4),
+                          Icon(AppIcons.selected, size: 16, color: colors.primary),
+                        ],
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+            ),
+            IconButton(
+              constraints: const BoxConstraints(minWidth: 48, minHeight: 48),
+              visualDensity: VisualDensity.standard,
+              tooltip: '$favoriteLabel · $name',
+              onPressed: onFavorite,
+              icon: Icon(
+                starred ? AppIcons.favoriteActive : AppIcons.favorite,
+                size: 19,
+                color: starred ? colors.primary : colors.onSurfaceVariant,
+              ),
+            ),
           ],
         ),
       ),
@@ -627,283 +973,98 @@ class ManageModelsLink extends StatelessWidget {
   }
 }
 
-/// 渠道筛选:放得下就是一条整宽的 [SegmentedPill];渠道多、放不下时换成
-/// 横向可滑的一排胶囊(两端与内容对齐,滑动时可以出到弹层边缘)。
-class _ChannelBar extends StatelessWidget {
-  const _ChannelBar({required this.groups, required this.shown, required this.onChanged});
+class _PickerEfforts extends StatelessWidget {
+  const _PickerEfforts({required this.efforts, required this.selected, required this.onChanged, required this.compact});
 
-  final List<ProviderGroup> groups;
-  final String shown;
-  final ValueChanged<String> onChanged;
-
-  static const height = 40.0;
+  final List<ReasoningEffort> efforts;
+  final String selected;
+  final ValueChanged<String>? onChanged;
+  final bool compact;
 
   @override
   Widget build(BuildContext context) {
-    const inset = SheetTitleBar.inset;
-    return LayoutBuilder(
-      builder: (context, constraints) {
-        final room = constraints.maxWidth - 2 * inset;
-        final natural = SegmentedPill.naturalWidth(context, [for (final g in groups) g.name]);
-        if (natural <= room) {
-          return Padding(
-            padding: const EdgeInsets.symmetric(horizontal: inset),
-            child: SegmentedPill<String>(
-              height: height,
-              segments: [for (final g in groups) PillSegment(g.id, g.name)],
-              selected: shown,
-              onChanged: onChanged,
-            ),
-          );
-        }
-        final style = SegmentedPill.labelStyle(context);
-        final rowHeight = MediaQuery.textScalerOf(context).scale(height);
-        return SizedBox(
-          height: rowHeight,
-          child: ListView.separated(
-            scrollDirection: Axis.horizontal,
-            padding: const EdgeInsets.symmetric(horizontal: inset),
-            itemCount: groups.length,
-            separatorBuilder: (_, _) => const SizedBox(width: 8),
-            itemBuilder: (context, i) => _ChannelChip(
-              label: groups[i].name,
-              selected: groups[i].id == shown,
-              style: style,
-              onTap: () => onChanged(groups[i].id),
-            ),
-          ),
-        );
-      },
-    );
-  }
-}
-
-/// 一颗渠道胶囊:选中的和 [SegmentedPill] 的滑块同一种料(浅色白、深色亮灰,
-/// 带一点投影),没选中的是底槽色。
-class _ChannelChip extends StatelessWidget {
-  const _ChannelChip({required this.label, required this.selected, required this.style, required this.onTap});
-
-  final String label;
-  final bool selected;
-  final TextStyle style;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final colors = theme.colorScheme;
-    final dark = theme.brightness == Brightness.dark;
-    final track = dark ? Colors.white.withValues(alpha: 0.07) : colors.onSurface.withValues(alpha: 0.06);
-    final thumb = dark ? Colors.white.withValues(alpha: 0.2) : Colors.white;
-    final quick = AppMotion.of(context, AppMotion.quick);
-    return Semantics(
-      button: true,
-      selected: selected,
-      inMutuallyExclusiveGroup: true,
-      label: label,
-      onTap: onTap,
-      excludeSemantics: true,
-      child: Pressable(
-        onTap: onTap,
-        child: AnimatedContainer(
-          duration: quick,
-          curve: AppMotion.std,
-          padding: const EdgeInsets.symmetric(horizontal: 18),
-          alignment: Alignment.center,
-          decoration: ShapeDecoration(
-            color: selected ? thumb : track,
-            shape: const StadiumBorder(),
-            shadows: selected && !dark
-                ? [BoxShadow(color: Colors.black.withValues(alpha: 0.08), blurRadius: 6, offset: const Offset(0, 1))]
-                : null,
-          ),
-          child: AnimatedDefaultTextStyle(
-            duration: quick,
-            style: style.copyWith(
-              fontWeight: selected ? FontWeight.w600 : FontWeight.w500,
-              color: selected ? colors.onSurface : colors.onSurfaceVariant,
-            ),
-            child: Text(label, maxLines: 1, softWrap: false),
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-/// 两列等宽的模型卡,同一行等高、间距 12;单数时最后一张占满整行。
-class _ModelGrid extends StatelessWidget {
-  const _ModelGrid({super.key, required this.models, required this.selected, required this.onPick});
-
-  final List<ModelInfo> models;
-  final ModelInfo? selected;
-  final ValueChanged<ModelInfo>? onPick;
-
-  static const gap = 12.0;
-
-  @override
-  Widget build(BuildContext context) {
-    Widget card(ModelInfo model) => _ModelCard(
-      key: ValueKey('${model.provider}\u0000${model.id}'),
-      model: model,
-      selected: selected?.id == model.id && selected?.provider == model.provider,
-      onTap: onPick == null ? null : () => onPick!(model),
-    );
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        for (var i = 0; i < models.length; i += 2) ...[
-          if (i > 0) const SizedBox(height: gap),
-          if (i + 1 < models.length)
-            IntrinsicHeight(
-              child: Row(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  Expanded(child: card(models[i])),
-                  const SizedBox(width: gap),
-                  Expanded(child: card(models[i + 1])),
-                ],
-              ),
-            )
-          else
-            card(models[i]),
-        ],
-      ],
-    );
-  }
-}
-
-/// 一张模型卡:短名(最多两行)+ 一行描述,右上角选择圈。选中时卡面染一层
-/// 很淡的主色、描一圈主色细边、圈里是实心对勾 —— 这一屏唯一的实心主色。
-class _ModelCard extends StatelessWidget {
-  const _ModelCard({super.key, required this.model, required this.selected, required this.onTap});
-
-  final ModelInfo model;
-  final bool selected;
-  final VoidCallback? onTap;
-
-  static const radius = BorderRadius.all(Radius.circular(AppShape.lg));
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final colors = theme.colorScheme;
-    final dsh = DshColors.of(context);
-    final dark = theme.brightness == Brightness.dark;
-    final description = model.description?.trim();
-    final name = shortModelName(model.name);
-    final duration = AppMotion.of(context, AppMotion.quick);
-    return Semantics(
-      button: true,
-      enabled: onTap != null,
-      selected: selected,
-      inMutuallyExclusiveGroup: true,
-      label: description == null || description.isEmpty ? name : context.l10n.viewDescribedValue(name, description),
-      onTap: onTap,
-      excludeSemantics: true,
-      child: Pressable(
-        onTap: onTap,
-        child: GlassSurface(
-          tier: GlassTier.card,
-          borderRadius: radius,
-          child: AnimatedContainer(
-            duration: duration,
-            curve: AppMotion.std,
-            padding: const EdgeInsets.all(16),
-            decoration: ShapeDecoration(
-              color: selected
-                  ? colors.primary.withValues(alpha: dark ? 0.14 : 0.07)
-                  : colors.primary.withValues(alpha: 0),
-              shape: RoundedSuperellipseBorder(
-                borderRadius: radius,
-                side: BorderSide(
-                  color: selected
-                      ? colors.primary.withValues(alpha: dark ? 0.7 : 0.55)
-                      : colors.primary.withValues(alpha: 0),
-                  width: 1.5,
-                ),
-              ),
-            ),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                Row(
+    final labels = [for (final e in efforts) effortLabel(e.id, e.name)];
+    if (compact) {
+      final index = efforts.indexWhere((e) => e.id == selected);
+      final currentLabel = index < 0 ? effortLabel(selected) : labels[index];
+      final colors = Theme.of(context).colorScheme;
+      return Align(
+        alignment: AlignmentDirectional.centerStart,
+        child: PopupMenuButton<String>(
+          key: const ValueKey('compact-model-effort'),
+          enabled: onChanged != null,
+          initialValue: selected,
+          onSelected: onChanged,
+          itemBuilder: (context) => [
+            for (var i = 0; i < efforts.length; i++)
+              PopupMenuItem<String>(
+                value: efforts[i].id,
+                child: Row(
                   children: [
-                    // 14 / two lines: the row leaves the name ~109 dp on a
-                    // 390 dp phone, so "GPT 5.6 Terra" at titleMedium's 16 was
-                    // cut after the first words.
-                    Expanded(
-                      child: Text(
-                        name,
-                        maxLines: 2,
-                        overflow: TextOverflow.ellipsis,
-                        style: theme.textTheme.titleSmall?.copyWith(height: 1.35),
-                      ),
-                    ),
-                    const SizedBox(width: 8),
-                    _CheckMark(selected: selected),
+                    Expanded(child: Text(labels[i])),
+                    if (efforts[i].id == selected) Icon(AppIcons.selected, size: 18, color: colors.primary),
                   ],
                 ),
-                if (description != null && description.isNotEmpty) ...[
-                  const SizedBox(height: 2),
-                  Text(
-                    description,
+              ),
+          ],
+          child: Container(
+            constraints: const BoxConstraints(minHeight: 48),
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+            decoration: BoxDecoration(
+              color: colors.onSurface.withValues(alpha: .06),
+              borderRadius: BorderRadius.circular(14),
+            ),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Flexible(
+                  child: Text(
+                    '${context.l10n.viewModelEffort} · $currentLabel',
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
-                    style: theme.textTheme.bodySmall?.copyWith(color: dsh.textTertiary),
+                    style: Theme.of(context).textTheme.labelLarge,
                   ),
-                ],
+                ),
+                const SizedBox(width: 6),
+                Icon(AppIcons.expand, size: 16, color: colors.onSurfaceVariant),
               ],
             ),
           ),
         ),
-      ),
-    );
-  }
-}
-
-/// 20 的选择圈:没选中是一道细环,选中是实心主色 + 白对勾(缩放淡入)。
-class _CheckMark extends StatelessWidget {
-  const _CheckMark({required this.selected});
-
-  final bool selected;
-
-  static const size = 20.0;
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final colors = theme.colorScheme;
-    final ring = theme.brightness == Brightness.dark
-        ? Colors.white.withValues(alpha: 0.22)
-        : colors.onSurface.withValues(alpha: 0.18);
-    return SizedBox.square(
-      dimension: size,
-      child: Stack(
-        fit: StackFit.expand,
-        children: [
-          DecoratedBox(
-            decoration: ShapeDecoration(
-              shape: CircleBorder(side: BorderSide(color: ring, width: 1.5)),
-            ),
-          ),
-          AnimatedScale(
-            scale: selected ? 1 : 0.5,
-            duration: AppMotion.of(context, AppMotion.quick),
-            curve: AppMotion.std,
-            child: AnimatedOpacity(
-              opacity: selected ? 1 : 0,
-              duration: AppMotion.of(context, AppMotion.quick),
-              child: DecoratedBox(
-                decoration: ShapeDecoration(color: colors.primary, shape: const CircleBorder()),
-                child: Icon(AppIcons.selected, size: 14, color: colors.onPrimary),
+      );
+    }
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Text(context.l10n.viewModelEffort, style: groupTitleStyle(context)),
+        const SizedBox(height: 6),
+        LayoutBuilder(
+          builder: (context, constraints) {
+            if (SegmentedPill.naturalWidth(context, labels) <= constraints.maxWidth) {
+              return SegmentedPill<String>(
+                height: 40,
+                segments: [for (final e in efforts) PillSegment(e.id, effortLabel(e.id, e.name))],
+                selected: selected,
+                onChanged: onChanged,
+              );
+            }
+            return SizedBox(
+              height: 44,
+              child: ListView.separated(
+                scrollDirection: Axis.horizontal,
+                itemCount: efforts.length,
+                separatorBuilder: (_, _) => const SizedBox(width: 6),
+                itemBuilder: (context, i) => ChoiceChip(
+                  label: Text(labels[i]),
+                  selected: selected == efforts[i].id,
+                  onSelected: onChanged == null ? null : (_) => onChanged!(efforts[i].id),
+                ),
               ),
-            ),
-          ),
-        ],
-      ),
+            );
+          },
+        ),
+      ],
     );
   }
 }
